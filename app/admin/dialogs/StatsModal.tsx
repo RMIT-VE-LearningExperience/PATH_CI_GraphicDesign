@@ -48,7 +48,7 @@ function DailyViewsChart({ rows }: { rows: { date: string; views: number }[] }) 
           const y = chartH - barH;
           return (
             <g key={row.date}>
-              <rect x={x} y={y} width={barW} height={barH} rx={2} fill="#3D8078" />
+              <rect x={x} y={y} width={barW} height={barH} rx={2} fill="#000054" />
               <title>{`${row.date}: ${row.views}`}</title>
               <text
                 x={x + barW / 2}

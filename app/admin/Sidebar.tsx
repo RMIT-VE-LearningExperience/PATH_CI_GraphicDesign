@@ -60,10 +60,10 @@ type Props = {
 const BG = "#45443F";
 const TEXT = "#E5E1D7";
 const MUTED = "#C2BDB1";
-const ACTIVE_BG = "rgba(61, 128, 120, 0.25)";
+const ACTIVE_BG = "rgba(0, 0, 84, 0.25)";
 const HOVER_BG = "rgba(255, 255, 255, 0.1)";
-const ACTIVE_TEXT = "#FDF9F1";
-const TEAL = "#3D8078";
+const ACTIVE_TEXT = "#f2f2f2";
+const TEAL = "#000054";
 const EXPANDED_WIDTH = 300;
 const COLLAPSED_WIDTH = 80;
 
@@ -224,7 +224,7 @@ export default function Sidebar({
                     borderColor: TEAL,
                     bgcolor: currentLevel1ItemId === item.id ? ACTIVE_BG : "#62615C",
                     transition: "all 180ms ease",
-                    "&:hover": { boxShadow: `0 0 0 2px rgba(61,128,120,0.4)` },
+                    "&:hover": { boxShadow: `0 0 0 2px rgba(0,0,84,0.4)` },
                   }}
                 >
                   <ImageIcon sx={{ fontSize: 18, color: MUTED }} />
@@ -420,7 +420,7 @@ export default function Sidebar({
                       startIcon={<SaveIcon sx={{ fontSize: "14px !important" }} />}
                       sx={{
                         fontSize: "0.7rem", py: 0.4, px: 1, minWidth: 0,
-                        bgcolor: TEAL, "&:hover": { bgcolor: "#2D6059" },
+                        bgcolor: TEAL, "&:hover": { bgcolor: "#00003f" },
                         textTransform: "none",
                       }}
                     >
@@ -490,7 +490,7 @@ export default function Sidebar({
                         variant="rounded"
                         sx={{
                           width: 32, height: 32, bgcolor: "#62615C",
-                          border: currentLevel1ItemId === item.id ? "2px solid #3D8078" : "1px solid transparent",
+                          border: currentLevel1ItemId === item.id ? "2px solid #000054" : "1px solid transparent",
                         }}
                       >
                         <ImageIcon sx={{ fontSize: 14 }} />
@@ -519,8 +519,8 @@ export default function Sidebar({
                 onClick={onGoHome}
                 sx={{
                   mt: 0.5, textTransform: "none", color: TEAL,
-                  borderColor: "rgba(61,128,120,0.25)",
-                  "&:hover": { bgcolor: "rgba(61,128,120,0.1)", borderColor: "rgba(61,128,120,0.4)" },
+                  borderColor: "rgba(0,0,84,0.25)",
+                  "&:hover": { bgcolor: "rgba(0,0,84,0.1)", borderColor: "rgba(0,0,84,0.4)" },
                 }}
               >
                 More
@@ -554,7 +554,7 @@ export default function Sidebar({
                     color: active ? "#fff" : TEXT,
                     borderColor: "rgba(255,255,255,0.2)",
                     textTransform: "none",
-                    "&:hover": { bgcolor: active ? "#2D6059" : HOVER_BG },
+                    "&:hover": { bgcolor: active ? "#00003f" : HOVER_BG },
                   }}
                 >
                   {label}
@@ -578,7 +578,7 @@ export default function Sidebar({
           color: showDeleted ? "#fff" : TEXT,
           borderColor: "rgba(255,255,255,0.2)",
           textTransform: "none",
-          "&:hover": { bgcolor: showDeleted ? "#2D6059" : HOVER_BG },
+          "&:hover": { bgcolor: showDeleted ? "#00003f" : HOVER_BG },
         }}
       >
         Deleted Items

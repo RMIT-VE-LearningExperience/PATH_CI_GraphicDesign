@@ -56,7 +56,7 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
             size="small"
             onMouseDown={(e) => { e.preventDefault(); runCommand(cmd); }}
             title={title}
-            sx={{ color: "#3D8078" }}
+            sx={{ color: "#000054" }}
           >
             {icon}
           </IconButton>
@@ -65,7 +65,7 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
           size="small"
           onMouseDown={(e) => { e.preventDefault(); insertLink(); }}
           title="Insert link"
-          sx={{ color: "#3D8078" }}
+          sx={{ color: "#000054" }}
         >
           <LinkIcon />
         </IconButton>
@@ -73,7 +73,7 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
           size="small"
           onMouseDown={(e) => { e.preventDefault(); runCommand("unlink"); }}
           title="Remove link"
-          sx={{ color: "#3D8078" }}
+          sx={{ color: "#000054" }}
         >
           <LinkOffIcon />
         </IconButton>

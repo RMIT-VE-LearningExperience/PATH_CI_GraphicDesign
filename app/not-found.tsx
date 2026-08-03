@@ -8,7 +8,7 @@ export default function NotFound() {
     <Box
       sx={{
         minHeight: "100vh",
-        bgcolor: "#FDF9F1",
+        bgcolor: "#f2f2f2",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -26,7 +26,7 @@ export default function NotFound() {
           href="/"
           variant="contained"
           sx={{
-            bgcolor: "#3D8078",
+            bgcolor: "#000054",
             color: "#fff",
             fontWeight: 700,
             textTransform: "none",

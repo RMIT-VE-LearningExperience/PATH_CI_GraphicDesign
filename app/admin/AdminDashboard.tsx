@@ -161,9 +161,9 @@ function SectionSettings({
           variant="contained"
           onClick={onAdd}
           sx={{
-            bgcolor: "#3D8078", color: "#fff", fontWeight: 600,
+            bgcolor: "#000054", color: "#fff", fontWeight: 600,
             textTransform: "none", whiteSpace: "nowrap",
-            "&:hover": { bgcolor: "#2D6059" },
+            "&:hover": { bgcolor: "#00003f" },
           }}
         >
           + Add {level.singularName}
@@ -172,7 +172,7 @@ function SectionSettings({
       {(dirty || saving || saved) && (
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
           {saving ? (
-            <CircularProgress size={16} sx={{ color: "#3D8078" }} />
+            <CircularProgress size={16} sx={{ color: "#000054" }} />
           ) : saved ? (
             <Stack direction="row" spacing={0.5} alignItems="center">
               <CheckIcon sx={{ fontSize: 16, color: "#1A7A2E" }} />
@@ -185,7 +185,7 @@ function SectionSettings({
                 variant="contained"
                 onClick={() => onSave(level.id, title, subtitle)}
                 startIcon={<SaveIcon sx={{ fontSize: "14px !important" }} />}
-                sx={{ fontSize: "0.7rem", py: 0.4, px: 1, minWidth: 0, bgcolor: "#3D8078", "&:hover": { bgcolor: "#2D6059" }, textTransform: "none" }}
+                sx={{ fontSize: "0.7rem", py: 0.4, px: 1, minWidth: 0, bgcolor: "#000054", "&:hover": { bgcolor: "#00003f" }, textTransform: "none" }}
               >
                 Save
               </Button>
@@ -763,7 +763,7 @@ export default function AdminDashboard() {
                       setGlobalListLevelId(null);
                       setShowDeleted(false);
                     }}
-                    sx={{ display: "block", textAlign: "left", color: "#3D8078" }}
+                    sx={{ display: "block", textAlign: "left", color: "#000054" }}
                   >
                     {p.name}
                   </Link>
@@ -824,7 +824,7 @@ export default function AdminDashboard() {
                 size="small"
                 sx={{
                   "& .MuiSwitch-switchBase.Mui-checked": { color: "#135b22" },
-                  "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#b3d3b9" },
+                  "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#b8b8d1" },
                   "& .MuiSwitch-switchBase": { color: "#C4321A" },
                   "& .MuiSwitch-track": { bgcolor: "#efc9c2" },
                 }}
@@ -850,7 +850,7 @@ export default function AdminDashboard() {
       <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 1, overflow: "hidden", mb: 3 }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ bgcolor: "#FDF9F1", borderBottom: "2px solid #E5E1D7" }}>
+            <TableRow sx={{ bgcolor: "#f2f2f2", borderBottom: "2px solid #E5E1D7" }}>
               <TableCell
                 sx={{ fontWeight: 700, cursor: "pointer", userSelect: "none", color: "#45443F", fontSize: "0.95rem", padding: "16px" }}
                 onClick={() => handleSortClick("name")}
@@ -943,7 +943,7 @@ export default function AdminDashboard() {
           <Button
             variant="contained"
             onClick={() => setStepDialog({ mode: "add", parentItemId: parentEntry.itemId })}
-            sx={{ bgcolor: "#3D8078", color: "#fff", fontWeight: 600, textTransform: "none", "&:hover": { bgcolor: "#2D6059" } }}
+            sx={{ bgcolor: "#000054", color: "#fff", fontWeight: 600, textTransform: "none", "&:hover": { bgcolor: "#00003f" } }}
           >
             + Add Step
           </Button>
@@ -991,9 +991,9 @@ export default function AdminDashboard() {
                                     variant="outlined"
                                     onClick={() => setExpandedStepId(expandedStepId === step.id ? null : step.id)}
                                     sx={{
-                                      color: "#3D8078", borderColor: "#3D8078", fontWeight: 600,
+                                      color: "#000054", borderColor: "#000054", fontWeight: 600,
                                       textTransform: "none",
-                                      "&:hover": { bgcolor: "rgba(61,128,120,0.1)", borderColor: "#2D6059" },
+                                      "&:hover": { bgcolor: "rgba(0,0,84,0.1)", borderColor: "#00003f" },
                                     }}
                                   >
                                     {expandedStepId === step.id ? "Collapse" : "Expand"}
@@ -1122,7 +1122,7 @@ export default function AdminDashboard() {
           <Button
             variant="contained"
             onClick={() => setItemDialog({ mode: "add", levelId: globalListLevelId, isGlobalList: true })}
-            sx={{ bgcolor: "#3D8078", color: "#fff", fontWeight: 600, textTransform: "none", whiteSpace: "nowrap", "&:hover": { bgcolor: "#2D6059" } }}
+            sx={{ bgcolor: "#000054", color: "#fff", fontWeight: 600, textTransform: "none", whiteSpace: "nowrap", "&:hover": { bgcolor: "#00003f" } }}
           >
             + Add {level.singularName}
           </Button>
@@ -1167,7 +1167,7 @@ export default function AdminDashboard() {
               <Button
                 size="small"
                 onClick={() => { setGlobalListNameFilter(""); setGlobalListContextFilter(""); }}
-                sx={{ textTransform: "none", color: "#3D8078" }}
+                sx={{ textTransform: "none", color: "#000054" }}
               >
                 Clear
               </Button>
@@ -1259,7 +1259,7 @@ export default function AdminDashboard() {
             <Button
               size="small"
               onClick={() => { setDeletedNameFilter(""); setDeletedTypeFilter(""); setDeletedFromDate(""); setDeletedToDate(""); }}
-              sx={{ textTransform: "none", color: "#3D8078" }}
+              sx={{ textTransform: "none", color: "#000054" }}
             >
               Clear
             </Button>
@@ -1272,7 +1272,7 @@ export default function AdminDashboard() {
           <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 1, overflow: "hidden" }}>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ bgcolor: "#FDF9F1", borderBottom: "2px solid #E5E1D7" }}>
+                <TableRow sx={{ bgcolor: "#f2f2f2", borderBottom: "2px solid #E5E1D7" }}>
                   <TableCell sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.9rem", py: 1.5, px: 2 }}>Name</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.9rem", py: 1.5, px: 2 }}>Type</TableCell>
                   <TableCell sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.9rem", py: 1.5, px: 2 }}>Location</TableCell>
@@ -1301,8 +1301,8 @@ export default function AdminDashboard() {
                             label={typeLabel}
                             size="small"
                             sx={{
-                              bgcolor: d.type === "step" ? "#E8F4F2" : "#F5F0E8",
-                              color: d.type === "step" ? "#3D8078" : "#45443F",
+                              bgcolor: d.type === "step" ? "#e6e6f0" : "#F5F0E8",
+                              color: d.type === "step" ? "#000054" : "#45443F",
                               fontWeight: 600, fontSize: "0.75rem",
                             }}
                           />
@@ -1331,7 +1331,7 @@ export default function AdminDashboard() {
                               startIcon={<RestoreIcon fontSize="small" />}
                               onClick={() => void dispatch("restoreDeletedItem", { deletedItemId: d.id })}
                               disabled={actionLoading}
-                              sx={{ textTransform: "none", color: "#3D8078", borderColor: "#3D8078", "&:hover": { bgcolor: "rgba(61,128,120,0.1)" }, whiteSpace: "nowrap" }}
+                              sx={{ textTransform: "none", color: "#000054", borderColor: "#000054", "&:hover": { bgcolor: "rgba(0,0,84,0.1)" }, whiteSpace: "nowrap" }}
                             >
                               Restore
                             </Button>
@@ -1424,14 +1424,14 @@ export default function AdminDashboard() {
   if (authLoading || loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-        <CircularProgress sx={{ color: "#3D8078" }} />
+        <CircularProgress sx={{ color: "#000054" }} />
       </Box>
     );
   }
 
   // ── Top bar (breadcrumbs + stats + logout) ────────────────────────────
 
-  const crumbSx = { color: "#3D8078", fontWeight: 500, "&:hover": { color: "#2D6059" }, cursor: "pointer" };
+  const crumbSx = { color: "#000054", fontWeight: 500, "&:hover": { color: "#00003f" }, cursor: "pointer" };
 
   // ── Main render ───────────────────────────────────────────────────────
 
@@ -1475,7 +1475,7 @@ export default function AdminDashboard() {
 
       <Box
         component="main"
-        sx={{ flex: 1, p: 3, bgcolor: "#FDF9F1", minHeight: "100vh", overflowY: "auto", position: "relative" }}
+        sx={{ flex: 1, p: 3, bgcolor: "#f2f2f2", minHeight: "100vh", overflowY: "auto", position: "relative" }}
       >
         {/* Loading overlay */}
         {actionLoading && (
@@ -1485,7 +1485,7 @@ export default function AdminDashboard() {
             display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 10,
           }}>
-            <CircularProgress sx={{ color: "#3D8078" }} />
+            <CircularProgress sx={{ color: "#000054" }} />
           </Box>
         )}
 
@@ -1507,14 +1507,14 @@ export default function AdminDashboard() {
               </Link>
             ))}
             {showDeleted && (
-              <Typography variant="body2" sx={{ color: "#3D8078", fontWeight: 500 }}>DELETED ITEMS</Typography>
+              <Typography variant="body2" sx={{ color: "#000054", fontWeight: 500 }}>DELETED ITEMS</Typography>
             )}
             {globalListLevelId && !showDeleted && (() => {
               const lvl = activeLevels.find((l) => l.id === globalListLevelId);
               const label = lvl
                 ? (lvl.type === "type1" ? `FULL ${lvl.name.toUpperCase()} LIST` : `${lvl.name.toUpperCase()} MANAGEMENT`)
                 : "MANAGEMENT";
-              return <Typography variant="body2" sx={{ color: "#3D8078", fontWeight: 500 }}>{label}</Typography>;
+              return <Typography variant="body2" sx={{ color: "#000054", fontWeight: 500 }}>{label}</Typography>;
             })()}
           </Breadcrumbs>
           <Stack direction="row" spacing={0.5} alignItems="center">

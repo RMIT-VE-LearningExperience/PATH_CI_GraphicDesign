@@ -8,13 +8,13 @@ const baseTheme = createTheme({
   palette: {
     mode: "light",
     primary: {
-      main: "#3D8078",
+      main: "#000054",
     },
     secondary: {
       main: "#62615C",
     },
     background: {
-      default: "#FDF9F1",
+      default: "#f2f2f2",
       paper: "#FFFFFF",
     },
     text: {

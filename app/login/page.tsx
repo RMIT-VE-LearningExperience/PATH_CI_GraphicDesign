@@ -128,7 +128,7 @@ export default function LoginPage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#FDF9F1",
+        backgroundColor: "#f2f2f2",
       }}
     >
       <Box

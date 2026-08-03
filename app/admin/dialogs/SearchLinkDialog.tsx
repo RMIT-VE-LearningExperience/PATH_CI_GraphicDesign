@@ -154,7 +154,7 @@ export default function SearchLinkDialog({
                     key={item.id}
                     onClick={() => onLink(item.id)}
                     disabled={loading}
-                    sx={{ borderRadius: 1, "&:hover": { bgcolor: "rgba(61,128,120,0.08)" } }}
+                    sx={{ borderRadius: 1, "&:hover": { bgcolor: "rgba(0,0,84,0.08)" } }}
                   >
                     <ListItemAvatar>
                       <Avatar

@@ -4,40 +4,40 @@ export const DIALOG_PAPER_SX = {
 } as const;
 
 export const DIALOG_TITLE_SX = {
-  bgcolor: "#FDF9F1",
+  bgcolor: "#f2f2f2",
   borderBottom: "2px solid #E5E1D7",
   fontWeight: 700,
-  color: "#3D8078",
+  color: "#000054",
   fontSize: "1.1rem",
   py: 2.5,
 } as const;
 
 export const DIALOG_ACTIONS_SX = {
   borderTop: "1px solid #E5E1D7",
-  bgcolor: "#FDF9F1",
+  bgcolor: "#f2f2f2",
   pt: 2,
   pb: 2,
   px: 3,
 } as const;
 
 export const PRIMARY_BTN_SX = {
-  bgcolor: "#3D8078",
+  bgcolor: "#000054",
   color: "#fff",
   fontWeight: 600,
   textTransform: "none" as const,
-  "&:hover": { bgcolor: "#2D6059" },
+  "&:hover": { bgcolor: "#00003f" },
 };
 
 export const CANCEL_BTN_SX = {
-  color: "#3D8078",
+  color: "#000054",
   fontWeight: 600,
   textTransform: "none" as const,
 };
 
 export const UPLOAD_BTN_SX = {
-  border: "2px solid #3D8078",
+  border: "2px solid #000054",
   borderRadius: 1,
   p: 1.5,
-  color: "#3D8078",
-  "&:hover": { bgcolor: "rgba(61,128,120,0.08)" },
+  color: "#000054",
+  "&:hover": { bgcolor: "rgba(0,0,84,0.08)" },
 } as const;

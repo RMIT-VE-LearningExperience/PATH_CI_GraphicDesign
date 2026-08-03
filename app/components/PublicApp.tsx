@@ -36,9 +36,9 @@ import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../
 const PROGRESS_KEY = "path_guide_progress_v1";
 
 const colors = {
-  primary: "#3D8078",
+  primary: "#000054",
   darkBg: "#45443F",
-  lightBg: "#FDF9F1",
+  lightBg: "#f2f2f2",
   lightBorder: "#E5E1D7",
   text: "#45443F",
   lightText: "#62615C",
@@ -125,7 +125,7 @@ function ItemCard({
           width: "100%",
           paddingBottom: "66.67%",
           overflow: "hidden",
-          bgcolor: "#FDF9F1",
+          bgcolor: "#f2f2f2",
         }}
       >
         {item.thumbnailUrl ? (
@@ -194,7 +194,7 @@ function ItemCard({
                 <IconButton
                   size="small"
                   onClick={(e) => e.stopPropagation()}
-                  sx={{ color: colors.primary, width: 24, height: 24, "&:hover": { bgcolor: "rgba(61,128,120,0.1)" } }}
+                  sx={{ color: colors.primary, width: 24, height: 24, "&:hover": { bgcolor: "rgba(0,0,84,0.1)" } }}
                 >
                   <InfoIcon sx={{ fontSize: 18 }} />
                 </IconButton>
@@ -577,7 +577,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     return (
       <Box sx={{ position: "fixed", inset: 0, bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Box sx={{ position: "relative", display: "inline-flex" }}>
-          <CircularProgress variant="determinate" value={100} size={48} thickness={4} sx={{ color: "rgba(61,128,120,0.15)" }} />
+          <CircularProgress variant="determinate" value={100} size={48} thickness={4} sx={{ color: "rgba(0,0,84,0.15)" }} />
           <CircularProgress size={48} thickness={4} sx={{ color: colors.primary, position: "absolute", left: 0, "& .MuiCircularProgress-circle": { strokeLinecap: "round" } }} />
         </Box>
       </Box>
@@ -941,7 +941,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                           onClick={() => { setEnlargedImage(step.imageUrl); setImgZoom(1); }}
                           sx={{
                             position: "relative", width: "100%", paddingBottom: "60%",
-                            overflow: "hidden", borderRadius: 1, bgcolor: "#FDF9F1",
+                            overflow: "hidden", borderRadius: 1, bgcolor: "#f2f2f2",
                             cursor: "pointer", transition: "all 0.2s ease",
                             "&:hover": { boxShadow: colors.cardShadowHover },
                           }}

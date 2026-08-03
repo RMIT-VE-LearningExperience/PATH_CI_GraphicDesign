@@ -180,7 +180,7 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  bgcolor: "#FDF9F1",
+                  bgcolor: "#f2f2f2",
                   userSelect: "none",
                   cursor: isDragging ? "grabbing" : "default",
                 }}
@@ -202,8 +202,8 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
                         position: "absolute",
                         left: `${px.x}px`, top: `${px.y}px`,
                         width: `${px.w}px`, height: `${px.h}px`,
-                        border: "2px solid #3D8078",
-                        bgcolor: "rgba(61,128,120,0.1)",
+                        border: "2px solid #000054",
+                        bgcolor: "rgba(0,0,84,0.1)",
                         cursor: isDragging ? "grabbing" : "grab",
                         boxSizing: "border-box",
                       }}
@@ -212,7 +212,7 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
                         onMouseDown={(e) => handleMouseDown(e as React.MouseEvent, true)}
                         sx={{
                           position: "absolute", width: 12, height: 12,
-                          bgcolor: "#3D8078", borderRadius: "50%",
+                          bgcolor: "#000054", borderRadius: "50%",
                           bottom: -6, right: -6,
                           cursor: "se-resize", zIndex: 10,
                         }}
@@ -231,9 +231,9 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
             Drag the crop box to reposition it. Drag the bottom-right handle to resize freely.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ borderTop: "1px solid #E5E1D7", pt: 2, pb: 2, px: 3, bgcolor: "#FDF9F1", justifyContent: "space-between" }}>
+        <DialogActions sx={{ borderTop: "1px solid #E5E1D7", pt: 2, pb: 2, px: 3, bgcolor: "#f2f2f2", justifyContent: "space-between" }}>
           <Tooltip title="Reset to original">
-            <IconButton onClick={handleReset} sx={{ color: "#3D8078" }}>
+            <IconButton onClick={handleReset} sx={{ color: "#000054" }}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>

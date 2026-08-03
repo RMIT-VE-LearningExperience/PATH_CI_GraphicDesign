@@ -161,8 +161,8 @@ export default function AddEditStepDialog({
                   sx={{
                     textTransform: "none", fontWeight: 600,
                     ...(mediaType === "image"
-                      ? { bgcolor: "#3D8078", color: "#fff", "&:hover": { bgcolor: "#2D6059" } }
-                      : { color: "#3D8078", borderColor: "#3D8078" }),
+                      ? { bgcolor: "#000054", color: "#fff", "&:hover": { bgcolor: "#00003f" } }
+                      : { color: "#000054", borderColor: "#000054" }),
                   }}
                 >
                   Image
@@ -175,8 +175,8 @@ export default function AddEditStepDialog({
                   sx={{
                     textTransform: "none", fontWeight: 600,
                     ...(mediaType === "video"
-                      ? { bgcolor: "#3D8078", color: "#fff", "&:hover": { bgcolor: "#2D6059" } }
-                      : { color: "#3D8078", borderColor: "#3D8078" }),
+                      ? { bgcolor: "#000054", color: "#fff", "&:hover": { bgcolor: "#00003f" } }
+                      : { color: "#000054", borderColor: "#000054" }),
                   }}
                 >
                   Video URL
@@ -245,7 +245,7 @@ export default function AddEditStepDialog({
                           variant="outlined"
                           startIcon={<CropIcon />}
                           onClick={() => setCropOpen(true)}
-                          sx={{ color: "#3D8078", borderColor: "#3D8078", textTransform: "none", fontWeight: 600 }}
+                          sx={{ color: "#000054", borderColor: "#000054", textTransform: "none", fontWeight: 600 }}
                         >
                           Crop
                         </Button>

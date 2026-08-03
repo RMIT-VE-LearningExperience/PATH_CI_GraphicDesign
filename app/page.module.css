@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  background: #FDF9F1;
+  background: #f2f2f2;
   color: #45443F;
   animation: fadeIn 420ms ease-out;
 }
@@ -15,7 +15,7 @@
   text-align: center;
   padding: 32px 20px 28px;
   border-bottom: 1px solid #C2BDB1;
-  background: #FDF9F1;
+  background: #f2f2f2;
   animation: riseIn 500ms ease-out;
 }
 
@@ -192,7 +192,7 @@
 
 .viewToggleButtonActive {
   border-color: #45443F;
-  background: #3D8078;
+  background: #000054;
   color: #fff;
 }
 
@@ -381,7 +381,7 @@
 }
 
 .itemRich a {
-  color: #3D8078;
+  color: #000054;
   text-decoration-thickness: 2px;
   text-underline-offset: 2px;
 }
