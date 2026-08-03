@@ -10,10 +10,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "E-number is required" }, { status: 400 });
     }
 
-    // Look up admin by staffNumber in Firestore
+    const cleanStaffNumber = staffNumber.trim().toUpperCase();
+
+    // Look up admin by normalized staffNumber in Firestore
     const snapshot = await adminDb
       .collection("admins")
-      .where("staffNumber", "==", staffNumber.trim())
+      .where("staffNumber", "==", cleanStaffNumber)
       .where("active", "==", true)
       .limit(1)
       .get();

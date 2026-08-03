@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
         await adminDb.collection("admins").doc(uid).set({
           name,
           email,
-          staffNumber,
+          staffNumber: staffNumber.trim().toUpperCase(),
           role: "admin",
           active: true,
           addedAt: new Date(),

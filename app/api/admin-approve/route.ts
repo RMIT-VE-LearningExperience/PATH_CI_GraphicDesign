@@ -77,12 +77,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const normalizedStaffNumber = requestData.staffNumber.trim().toUpperCase();
+
     // Write to admins collection
     await adminDb.collection("admins").doc(uid).set(
       {
         name: requestData.name,
         email: requestData.email,
-        staffNumber: requestData.staffNumber,
+        staffNumber: normalizedStaffNumber,
         role: "admin",
         active: true,
         addedAt: new Date(),

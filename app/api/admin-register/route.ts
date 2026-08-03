@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name, email, and e-number are all required" }, { status: 400 });
     }
 
-    const cleanStaffNumber = staffNumber.trim();
+    const cleanStaffNumber = staffNumber.trim().toUpperCase();
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
 
