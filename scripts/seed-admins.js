@@ -37,7 +37,7 @@ function loadCredential() {
 const app = initializeApp({ credential: loadCredential() });
 
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = getFirestore(app, process.env.FIREBASE_ADMIN_DATABASE_ID || "(default)");
 
 async function seedAdmins() {
   const adminsPath = join(__dirname, "admins.json");
