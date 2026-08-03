@@ -1,0 +1,15 @@
+{
+  "apphosting": {},
+  "functions": {
+    "source": "functions",
+    "codebase": "path-ci-graphicdesign",
+    "predeploy": ["npm --prefix functions run build"]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

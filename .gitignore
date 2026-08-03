@@ -1,0 +1,13 @@
+node_modules
+.next
+functions/lib
+.env.local
+.env.*.local
+firebase-credentials.json
+project-path-credentials.json
+scripts/admins.json
+
+# Local planning & documentation (not for repo)
+documentation/
+*.bak
+*.bak-*

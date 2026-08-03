@@ -1,0 +1,41 @@
+{
+  "name": "path-ci-graphicdesign",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "dev:staging": "dotenv -e .env.staging.local -- next dev",
+    "seed-admins": "node --env-file=.env.local scripts/seed-admins.js",
+    "seed-content": "node --env-file=.env.local scripts/seed-content.js"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@hello-pangea/dnd": "^18.0.1",
+    "@mui/icons-material": "^5.18.0",
+    "@mui/material": "^5.15.20",
+    "firebase": "^12.11.0",
+    "firebase-admin": "^13.6.1",
+    "next": "^14.2.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "dotenv-cli": "^11.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.0",
+    "typescript": "^5.4.0"
+  }
+}
