@@ -156,6 +156,7 @@ export default function AddEditStepDialog({
                 <Button
                   size="small"
                   variant={mediaType === "image" ? "contained" : "outlined"}
+                  aria-pressed={mediaType === "image"}
                   startIcon={<ImageIcon />}
                   onClick={() => { setMediaType("image"); setVideoUrl(""); }}
                   sx={{
@@ -170,6 +171,7 @@ export default function AddEditStepDialog({
                 <Button
                   size="small"
                   variant={mediaType === "video" ? "contained" : "outlined"}
+                  aria-pressed={mediaType === "video"}
                   startIcon={<LinkIcon />}
                   onClick={() => { setMediaType("video"); clearImage(); }}
                   sx={{
@@ -190,7 +192,7 @@ export default function AddEditStepDialog({
 
                   {!imageDataUrl && (
                     <Stack direction="row" alignItems="center" spacing={1.5}>
-                      <IconButton onClick={() => fileInputRef.current?.click()} sx={UPLOAD_BTN_SX}>
+                      <IconButton onClick={() => fileInputRef.current?.click()} aria-label="Upload image" sx={UPLOAD_BTN_SX}>
                         <AddIcon />
                       </IconButton>
                       <Typography variant="caption" color="text.secondary">
@@ -207,12 +209,12 @@ export default function AddEditStepDialog({
                   />
 
                   {imageError && (
-                    <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+                    <Typography variant="caption" color="error" display="block" role="alert" sx={{ mt: 0.5 }}>
                       {imageError}
                     </Typography>
                   )}
                   {compressed && (
-                    <Typography variant="caption" display="block" sx={{ mt: 0.5, color: "#f59e0b" }}>
+                    <Typography variant="caption" display="block" role="status" sx={{ mt: 0.5, color: "#7A5C00" }}>
                       Image was compressed to meet the 700 KB limit.
                     </Typography>
                   )}
@@ -234,9 +236,10 @@ export default function AddEditStepDialog({
                         <IconButton
                           size="small"
                           onClick={clearImage}
+                          aria-label="Remove image"
                           sx={{ position: "absolute", top: 0, right: 0, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
                         >
-                          ✕
+                          <span aria-hidden="true">✕</span>
                         </IconButton>
                       </Box>
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1 }}>
@@ -277,6 +280,7 @@ export default function AddEditStepDialog({
                             src={embedUrl}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
+                            title="Video preview"
                             sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
                           />
                         </Box>
@@ -284,9 +288,10 @@ export default function AddEditStepDialog({
                       <IconButton
                         size="small"
                         onClick={() => setVideoUrl("")}
+                        aria-label="Remove video"
                         sx={{ position: "absolute", top: 4, right: 4, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
                       >
-                        ✕
+                        <span aria-hidden="true">✕</span>
                       </IconButton>
                     </Box>
                   )}

@@ -28,6 +28,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Tooltip,
   Typography,
@@ -65,6 +66,12 @@ import EmbedDialog from "./dialogs/EmbedDialog";
 import StatsModal from "./dialogs/StatsModal";
 
 // ── Helper ────────────────────────────────────────────────────────────
+
+// Visually hidden but available to assistive tech
+const visuallyHiddenSx = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+  overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0,
+} as const;
 
 function getVideoEmbedUrl(url: string): string | null {
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
@@ -170,7 +177,7 @@ function SectionSettings({
         </Button>
       </Box>
       {(dirty || saving || saved) && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+        <Stack direction="row" spacing={1} alignItems="center" role="status" sx={{ mt: 1 }}>
           {saving ? (
             <CircularProgress size={16} sx={{ color: "#000054" }} />
           ) : saved ? (
@@ -732,10 +739,24 @@ export default function AdminDashboard() {
       >
         <TableCell sx={{ padding: "12px 16px" }}>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <Avatar src={item.thumbnailUrl} variant="rounded" sx={{ width: 32, height: 32 }}>
-              <ImageIcon sx={{ fontSize: 16, color: "grey.400" }} />
+            <Avatar src={item.thumbnailUrl} alt="" variant="rounded" sx={{ width: 32, height: 32 }}>
+              <ImageIcon aria-hidden="true" sx={{ fontSize: 16, color: "grey.400" }} />
             </Avatar>
-            <Typography variant="body2">{item.name}</Typography>
+            {opts.isGlobalList ? (
+              <Typography variant="body2">{item.name}</Typography>
+            ) : (
+              // Real button as the primary action, so keyboard and screen-reader
+              // users can open the item; the row's own click is a mouse shortcut
+              <Link
+                component="button"
+                variant="body2"
+                underline="hover"
+                onClick={(e) => { e.stopPropagation(); handleNavigate(item, levelId); }}
+                sx={{ textAlign: "left", color: "#000054", fontWeight: 500 }}
+              >
+                {item.name}
+              </Link>
+            )}
           </Stack>
         </TableCell>
 
@@ -776,6 +797,8 @@ export default function AdminDashboard() {
           <Stack direction="row" alignItems="center" justifyContent="center">
             <IconButton
               size="small"
+              aria-label={`More actions for ${item.name}`}
+              aria-haspopup="menu"
               onClick={(e) => {
                 e.stopPropagation();
                 setMenuTarget({ anchorEl: e.currentTarget, type: "item", id: item.id, extra: levelId, item });
@@ -785,21 +808,21 @@ export default function AdminDashboard() {
             </IconButton>
             {showShareTools && features.copyLink && (
               <Tooltip title="Copy link">
-                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setCopyLinkTarget({ itemName: item.name, url: itemUrl }); }}>
+                <IconButton size="small" aria-label={`Copy link for ${item.name}`} onClick={(e) => { e.stopPropagation(); setCopyLinkTarget({ itemName: item.name, url: itemUrl }); }}>
                   <ContentCopyIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
             {showShareTools && features.qrCode && (
               <Tooltip title="Download QR code">
-                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setQrTarget({ itemName: item.name, url: itemUrl }); }}>
+                <IconButton size="small" aria-label={`Download QR code for ${item.name}`} onClick={(e) => { e.stopPropagation(); setQrTarget({ itemName: item.name, url: itemUrl }); }}>
                   <QrCodeIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
             {showShareTools && features.canvasEmbed && (
               <Tooltip title="Embed in Canvas LMS">
-                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setEmbedTarget({ itemName: item.name, url: itemUrl }); }}>
+                <IconButton size="small" aria-label={`Embed ${item.name} in Canvas LMS`} onClick={(e) => { e.stopPropagation(); setEmbedTarget({ itemName: item.name, url: itemUrl }); }}>
                   <SettingsEthernetIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -821,6 +844,7 @@ export default function AdminDashboard() {
               <Switch
                 checked={published}
                 onChange={() => void handlePublishToggle(item, levelId)}
+                inputProps={{ "aria-label": `Published: ${item.name}` }}
                 size="small"
                 sx={{
                   "& .MuiSwitch-switchBase.Mui-checked": { color: "#135b22" },
@@ -852,10 +876,16 @@ export default function AdminDashboard() {
           <TableHead>
             <TableRow sx={{ bgcolor: "#f2f2f2", borderBottom: "2px solid #E5E1D7" }}>
               <TableCell
-                sx={{ fontWeight: 700, cursor: "pointer", userSelect: "none", color: "#45443F", fontSize: "0.95rem", padding: "16px" }}
-                onClick={() => handleSortClick("name")}
+                sortDirection={sortColumn === "name" ? (sortAsc ? "asc" : "desc") : false}
+                sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.95rem", padding: "16px" }}
               >
-                {level?.singularName ?? "Name"}{sortColumn === "name" ? (sortAsc ? " ↑" : " ↓") : ""}
+                <TableSortLabel
+                  active={sortColumn === "name"}
+                  direction={sortColumn === "name" && !sortAsc ? "desc" : "asc"}
+                  onClick={() => handleSortClick("name")}
+                >
+                  {level?.singularName ?? "Name"}
+                </TableSortLabel>
               </TableCell>
               {showParentCols && levelIndex === 2 && (
                 <TableCell sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.95rem", padding: "16px" }}>
@@ -867,13 +897,21 @@ export default function AdminDashboard() {
                   Active In
                 </TableCell>
               )}
-              <TableCell align="center" sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.95rem", padding: "16px", width: showShareTools ? 196 : 52 }} />
+              <TableCell align="center" sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.95rem", padding: "16px", width: showShareTools ? 196 : 52 }}>
+                <Box component="span" sx={visuallyHiddenSx}>Actions</Box>
+              </TableCell>
               <TableCell
                 align="center"
-                sx={{ fontWeight: 700, cursor: "pointer", userSelect: "none", color: "#45443F", fontSize: "0.95rem", padding: "16px" }}
-                onClick={() => handleSortClick("lastEdited")}
+                sortDirection={sortColumn === "lastEdited" ? (sortAsc ? "asc" : "desc") : false}
+                sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.95rem", padding: "16px" }}
               >
-                Last Edited{sortColumn === "lastEdited" ? (sortAsc ? " ↑" : " ↓") : ""}
+                <TableSortLabel
+                  active={sortColumn === "lastEdited"}
+                  direction={sortColumn === "lastEdited" && !sortAsc ? "desc" : "asc"}
+                  onClick={() => handleSortClick("lastEdited")}
+                >
+                  Last Edited
+                </TableSortLabel>
               </TableCell>
               {!opts.isGlobalList && (
                 <TableCell align="center" sx={{ fontWeight: 700, color: "#45443F", fontSize: "0.95rem", padding: "16px" }}>Status</TableCell>
@@ -937,7 +975,7 @@ export default function AdminDashboard() {
     return (
       <Box>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-          <Typography variant="h5" sx={{ color: "#45443F", fontWeight: 700 }}>
+          <Typography variant="h5" component="h2" sx={{ color: "#45443F", fontWeight: 700 }}>
             Steps: {parentEntry.itemName}
           </Typography>
           <Button
@@ -977,19 +1015,22 @@ export default function AdminDashboard() {
                             <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, flex: 1 }}>
                               <Box
                                 {...draggableProvided.dragHandleProps}
+                                aria-label={`Reorder step ${index + 1}: ${step.title}. Press space to pick up, arrow keys to move.`}
                                 sx={{ display: "flex", alignItems: "center", pt: 0.5, cursor: "grab", color: "text.disabled" }}
                               >
                                 <DragIndicatorIcon fontSize="small" />
                               </Box>
                               <Box sx={{ flex: 1 }}>
                                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-                                  <Typography variant="h6" fontWeight={700} sx={{ color: "#45443F" }}>
+                                  <Typography variant="h6" component="h3" fontWeight={700} sx={{ color: "#45443F" }}>
                                     Step {index + 1}: {step.title}
                                   </Typography>
                                   <Button
                                     size="small"
                                     variant="outlined"
                                     onClick={() => setExpandedStepId(expandedStepId === step.id ? null : step.id)}
+                                    aria-expanded={expandedStepId === step.id}
+                                    aria-controls={`step-details-${step.id}`}
                                     sx={{
                                       color: "#000054", borderColor: "#000054", fontWeight: 600,
                                       textTransform: "none",
@@ -1000,7 +1041,7 @@ export default function AdminDashboard() {
                                   </Button>
                                 </Box>
 
-                                <Collapse in={expandedStepId === step.id}>
+                                <Collapse in={expandedStepId === step.id} id={`step-details-${step.id}`}>
                                   <Box sx={{ mt: 2, mb: 1 }}>
                                     {step.contentHtml && (
                                       <Box
@@ -1015,7 +1056,7 @@ export default function AdminDashboard() {
                                       <Box
                                         component="img"
                                         src={step.imageUrl}
-                                        alt="Step image"
+                                        alt={step.imageAlt ?? `Image for step ${index + 1}`}
                                         sx={{ width: "100%", maxWidth: 400, maxHeight: 300, objectFit: "cover", borderRadius: 1, mt: 1 }}
                                       />
                                     )}
@@ -1030,6 +1071,7 @@ export default function AdminDashboard() {
                                               src={getVideoEmbedUrl(step.videoUrl)!}
                                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                               allowFullScreen
+                                              title={step.title || "Step video"}
                                               sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
                                             />
                                           </Box>
@@ -1042,6 +1084,8 @@ export default function AdminDashboard() {
                             </Box>
                             <IconButton
                               size="small"
+                              aria-label={`More actions for step ${index + 1}: ${step.title}`}
+                              aria-haspopup="menu"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setMenuTarget({ anchorEl: e.currentTarget, type: "step", id: step.id, extra: parentEntry.itemId, step });
@@ -1114,7 +1158,7 @@ export default function AdminDashboard() {
       <Box>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
           <Box>
-            <Typography variant="h5" sx={{ color: "#45443F", fontWeight: 700, mb: 0.5 }}>{label}</Typography>
+            <Typography variant="h5" component="h2" sx={{ color: "#45443F", fontWeight: 700, mb: 0.5 }}>{label}</Typography>
             <Typography variant="body2" color="text.secondary">
               View and manage all {level.name.toLowerCase()} across the system
             </Typography>
@@ -1138,8 +1182,9 @@ export default function AdminDashboard() {
               sx={{ minWidth: 200 }}
             />
             <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>{contextLabel}</InputLabel>
+              <InputLabel id="global-context-filter-label">{contextLabel}</InputLabel>
               <Select
+                labelId="global-context-filter-label"
                 label={contextLabel}
                 value={globalListContextFilter}
                 onChange={(e) => setGlobalListContextFilter(e.target.value)}
@@ -1211,7 +1256,7 @@ export default function AdminDashboard() {
     return (
       <Box>
         <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" sx={{ color: "#45443F", fontWeight: 700, mb: 0.5 }}>Deleted Items</Typography>
+          <Typography variant="h5" component="h2" sx={{ color: "#45443F", fontWeight: 700, mb: 0.5 }}>Deleted Items</Typography>
           <Typography variant="body2" color="text.secondary">Restore or permanently delete removed items</Typography>
         </Box>
 
@@ -1225,8 +1270,9 @@ export default function AdminDashboard() {
             sx={{ minWidth: 200 }}
           />
           <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Type</InputLabel>
+            <InputLabel id="deleted-type-filter-label">Type</InputLabel>
             <Select
+              labelId="deleted-type-filter-label"
               label="Type"
               value={deletedTypeFilter}
               onChange={(e) => setDeletedTypeFilter(e.target.value)}
@@ -1310,7 +1356,7 @@ export default function AdminDashboard() {
                         <TableCell sx={{ py: 1.25, px: 2, color: "text.secondary", fontSize: "0.85rem", maxWidth: 200 }}>
                           {d.location ? (
                             <Tooltip title={d.location} placement="top-start">
-                              <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <Box tabIndex={0} sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", "&:focus-visible": { outline: "2px solid #000054" } }}>
                                 {d.location}
                               </Box>
                             </Tooltip>
@@ -1329,6 +1375,7 @@ export default function AdminDashboard() {
                             <Button
                               variant="outlined" size="small"
                               startIcon={<RestoreIcon fontSize="small" />}
+                              aria-label={`Restore ${d.name}`}
                               onClick={() => void dispatch("restoreDeletedItem", { deletedItemId: d.id })}
                               disabled={actionLoading}
                               sx={{ textTransform: "none", color: "#000054", borderColor: "#000054", "&:hover": { bgcolor: "rgba(0,0,84,0.1)" }, whiteSpace: "nowrap" }}
@@ -1339,6 +1386,7 @@ export default function AdminDashboard() {
                               <IconButton
                                 size="small"
                                 color="error"
+                                aria-label={`Delete ${d.name} permanently`}
                                 onClick={() => setDeleteTarget({ kind: "deletedBinItem", deletedItemId: d.id, name: d.name })}
                               >
                                 <DeleteIcon fontSize="small" />
@@ -1389,7 +1437,7 @@ export default function AdminDashboard() {
     }
 
     return (
-      <Menu anchorEl={menuTarget.anchorEl} open onClose={handleClose}
+      <Menu anchorEl={menuTarget.anchorEl} open onClose={handleClose} MenuListProps={{ "aria-label": "Actions" }}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
       >
@@ -1423,8 +1471,8 @@ export default function AdminDashboard() {
 
   if (authLoading || loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-        <CircularProgress sx={{ color: "#000054" }} />
+      <Box role="status" sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
+        <CircularProgress sx={{ color: "#000054" }} aria-label="Loading" />
       </Box>
     );
   }
@@ -1444,6 +1492,21 @@ export default function AdminDashboard() {
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          ...visuallyHiddenSx,
+          "&:focus": {
+            position: "fixed", top: 8, left: 8, width: "auto", height: "auto", margin: 0,
+            padding: "8px 16px", overflow: "visible", clip: "auto", whiteSpace: "normal",
+            zIndex: 2000, bgcolor: "#000054", color: "#fff", borderRadius: 1, fontWeight: 700,
+            textDecoration: "none",
+          },
+        }}
+      >
+        Skip to content
+      </Box>
       <Sidebar
         activeLevels={activeLevels}
         features={state?.appSettings.features ?? { copyLink: true, qrCode: true, canvasEmbed: true, fullItemListView: true }}
@@ -1475,13 +1538,15 @@ export default function AdminDashboard() {
 
       <Box
         component="main"
-        sx={{ flex: 1, p: 3, bgcolor: "#f2f2f2", minHeight: "100vh", overflowY: "auto", position: "relative" }}
+        id="main-content"
+        tabIndex={-1}
+        sx={{ flex: 1, p: 3, bgcolor: "#f2f2f2", minHeight: "100vh", overflowY: "auto", position: "relative", outline: "none" }}
       >
         {/* Loading overlay */}
         {actionLoading && (
-          <Box sx={{
+          <Box role="status" aria-label="Saving changes" sx={{
             position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-            bgcolor: "rgba(253,249,241,0.6)",
+            bgcolor: "rgba(242,242,242,0.6)",
             display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 10,
           }}>
@@ -1519,17 +1584,27 @@ export default function AdminDashboard() {
           </Breadcrumbs>
           <Stack direction="row" spacing={0.5} alignItems="center">
             <Tooltip title="Statistics">
-              <IconButton onClick={() => setStatsOpen(true)} size="small" sx={{ color: "#666", "&:hover": { color: "#333" } }}>
+              <IconButton onClick={() => setStatsOpen(true)} size="small" aria-label="Statistics" sx={{ color: "#595959", "&:hover": { color: "#333" } }}>
                 <EqualizerIcon fontSize="small" />
               </IconButton>
             </Tooltip>
             <Tooltip title="Sign Out">
-              <IconButton onClick={() => void signOut()} size="small" sx={{ color: "#666", "&:hover": { color: "#333" } }}>
+              <IconButton onClick={() => void signOut()} size="small" aria-label="Sign out" sx={{ color: "#595959", "&:hover": { color: "#333" } }}>
                 <LogoutIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           </Stack>
         </Box>
+
+        <Typography component="h1" sx={visuallyHiddenSx}>
+          {showDeleted
+            ? "Deleted items"
+            : globalListLevelId
+              ? `${activeLevels.find((l) => l.id === globalListLevelId)?.name ?? "Management"} list`
+              : atSteps && parentEntry
+                ? `Steps: ${parentEntry.itemName}`
+                : (currentLevel?.name ?? "Dashboard")}
+        </Typography>
 
         {/* Main views */}
         {showDeleted && renderDeletedView()}

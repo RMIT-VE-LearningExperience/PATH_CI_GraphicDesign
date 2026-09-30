@@ -9,7 +9,7 @@ import {
   Link as LinkIcon,
   LinkOff as LinkOffIcon,
 } from "@mui/icons-material";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 type Props = {
   label: string;
@@ -19,6 +19,7 @@ type Props = {
 
 export default function RichTextEditor({ label, value, onChange }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const labelId = useId();
 
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
@@ -41,10 +42,10 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
 
   return (
     <Box>
-      <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>
+      <Typography id={labelId} variant="body2" fontWeight={500} sx={{ mb: 1 }}>
         {label}
       </Typography>
-      <Stack direction="row" spacing={0.5} sx={{ mb: 1, flexWrap: "wrap" }}>
+      <Stack role="toolbar" aria-label={`${label} formatting`} direction="row" spacing={0.5} sx={{ mb: 1, flexWrap: "wrap" }}>
         {[
           { icon: <FormatBoldIcon />, cmd: "bold", title: "Bold" },
           { icon: <FormatItalicIcon />, cmd: "italic", title: "Italic" },
@@ -54,7 +55,11 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
           <IconButton
             key={cmd}
             size="small"
-            onMouseDown={(e) => { e.preventDefault(); runCommand(cmd); }}
+            // mousedown is prevented so the editor keeps its selection;
+            // click (also fired by Enter/Space) runs the command
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => runCommand(cmd)}
+            aria-label={title}
             title={title}
             sx={{ color: "#000054" }}
           >
@@ -63,7 +68,9 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
         ))}
         <IconButton
           size="small"
-          onMouseDown={(e) => { e.preventDefault(); insertLink(); }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={insertLink}
+          aria-label="Insert link"
           title="Insert link"
           sx={{ color: "#000054" }}
         >
@@ -71,7 +78,9 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
         </IconButton>
         <IconButton
           size="small"
-          onMouseDown={(e) => { e.preventDefault(); runCommand("unlink"); }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => runCommand("unlink")}
+          aria-label="Remove link"
           title="Remove link"
           sx={{ color: "#000054" }}
         >
@@ -81,6 +90,9 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
       <Box
         ref={editorRef}
         contentEditable
+        role="textbox"
+        aria-multiline="true"
+        aria-labelledby={labelId}
         suppressContentEditableWarning
         onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
         onPaste={(e) => {

@@ -40,8 +40,9 @@ function DailyViewsChart({ rows }: { rows: { date: string; views: number }[] }) 
   const chartW = rows.length * (barW + gap);
 
   return (
-    <Box sx={{ overflowX: "auto" }}>
-      <svg width={chartW} height={chartH + 20} style={{ display: "block" }}>
+    <Box tabIndex={0} role="region" aria-label="Daily views chart" sx={{ overflowX: "auto", position: "relative", "&:focus-visible": { outline: "2px solid #000054" } }}>
+      {/* The bars are visual only; exact values are in the table below */}
+      <svg width={chartW} height={chartH + 20} style={{ display: "block" }} role="img" aria-label={`Bar chart of daily page views over the last ${rows.length} days`}>
         {rows.map((row, i) => {
           const barH = Math.max(2, Math.round((row.views / max) * chartH));
           const x = i * (barW + gap);
@@ -55,7 +56,7 @@ function DailyViewsChart({ rows }: { rows: { date: string; views: number }[] }) 
                 y={chartH + 14}
                 textAnchor="middle"
                 fontSize={9}
-                fill="#888"
+                fill="#595959"
               >
                 {row.date.slice(5)}
               </text>
@@ -63,6 +64,15 @@ function DailyViewsChart({ rows }: { rows: { date: string; views: number }[] }) 
           );
         })}
       </svg>
+      <Box component="table" sx={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
+        <caption>Daily views (last {rows.length} days)</caption>
+        <thead><tr><th scope="col">Date</th><th scope="col">Views</th></tr></thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.date}><td>{row.date}</td><td>{row.views}</td></tr>
+          ))}
+        </tbody>
+      </Box>
     </Box>
   );
 }
@@ -123,8 +133,8 @@ export default function StatsModal({ open, onClose, getAuthToken }: Props) {
       <DialogTitle>Statistics</DialogTitle>
       <DialogContent>
         {loading && (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress size={36} />
+          <Box role="status" sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+            <CircularProgress size={36} aria-label="Loading statistics" />
           </Box>
         )}
 
@@ -158,7 +168,7 @@ export default function StatsModal({ open, onClose, getAuthToken }: Props) {
                     textAlign: "center",
                   }}
                 >
-                  <Typography variant="h6" fontWeight={600}>
+                  <Typography variant="h6" component="p" fontWeight={600}>
                     {value}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -172,7 +182,7 @@ export default function StatsModal({ open, onClose, getAuthToken }: Props) {
 
             {/* 14-day chart */}
             <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+              <Typography variant="subtitle2" component="h3" sx={{ mb: 1.5 }}>
                 Daily Views (last 14 days)
               </Typography>
               <DailyViewsChart rows={data.dailyViews} />
@@ -182,7 +192,7 @@ export default function StatsModal({ open, onClose, getAuthToken }: Props) {
 
             {/* Top pages */}
             <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" component="h3" sx={{ mb: 1 }}>
                 Top Pages (last 30 days)
               </Typography>
               <Stack spacing={0.5}>

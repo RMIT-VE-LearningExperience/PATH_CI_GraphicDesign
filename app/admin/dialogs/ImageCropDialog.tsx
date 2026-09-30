@@ -111,6 +111,23 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
     setIsResizing(false);
   }
 
+  // Keyboard alternative to dragging: arrows move the crop box, Shift+arrows resize it
+  function handleCropKeyDown(e: React.KeyboardEvent) {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const stepX = Math.max(1, Math.round(imgNaturalW * 0.02));
+    const stepY = Math.max(1, Math.round(imgNaturalH * 0.02));
+    const dx = e.key === "ArrowLeft" ? -stepX : e.key === "ArrowRight" ? stepX : 0;
+    const dy = e.key === "ArrowUp" ? -stepY : e.key === "ArrowDown" ? stepY : 0;
+    if (e.shiftKey) {
+      setBoxW((w) => { const nw = w + dx; return nw > 50 && boxX + nw <= imgNaturalW ? nw : w; });
+      setBoxH((h) => { const nh = h + dy; return nh > 50 && boxY + nh <= imgNaturalH ? nh : h; });
+    } else {
+      setBoxX((x) => Math.max(0, Math.min(x + dx, Math.max(0, imgNaturalW - boxW))));
+      setBoxY((y) => Math.max(0, Math.min(y + dy, Math.max(0, imgNaturalH - boxH))));
+    }
+  }
+
   function handleApply() {
     if (!workingImage || !outputCanvasRef.current || !boxW || !boxH) return;
     const img = new Image();
@@ -198,7 +215,13 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
                   <>
                     <Box
                       onMouseDown={(e) => handleMouseDown(e, false)}
+                      onKeyDown={handleCropKeyDown}
+                      tabIndex={0}
+                      role="group"
+                      aria-label="Crop area"
+                      aria-describedby="crop-instructions"
                       sx={{
+                        "&:focus-visible": { outline: "none", boxShadow: "0 0 0 3px #fff, 0 0 0 6px #000054" },
                         position: "absolute",
                         left: `${px.x}px`, top: `${px.y}px`,
                         width: `${px.w}px`, height: `${px.h}px`,
@@ -209,6 +232,7 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
                       }}
                     >
                       <Box
+                        aria-hidden="true"
                         onMouseDown={(e) => handleMouseDown(e as React.MouseEvent, true)}
                         sx={{
                           position: "absolute", width: 12, height: 12,
@@ -227,13 +251,14 @@ export default function ImageCropDialog({ open, onClose, imageDataUrl, originalD
               </Box>
             )}
           </Box>
-          <Typography variant="body2" color="text.secondary">
-            Drag the crop box to reposition it. Drag the bottom-right handle to resize freely.
+          <Typography id="crop-instructions" variant="body2" color="text.secondary">
+            Drag the crop box to reposition it, or focus it and use the arrow keys. Drag the bottom-right
+            handle, or hold Shift and use the arrow keys, to resize freely.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ borderTop: "1px solid #E5E1D7", pt: 2, pb: 2, px: 3, bgcolor: "#f2f2f2", justifyContent: "space-between" }}>
           <Tooltip title="Reset to original">
-            <IconButton onClick={handleReset} sx={{ color: "#000054" }}>
+            <IconButton onClick={handleReset} aria-label="Reset to original" sx={{ color: "#000054" }}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>

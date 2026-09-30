@@ -22,11 +22,10 @@ export default function Footer({ year, isAdmin }: { year: number; isAdmin: boole
           padding: 0,
           textAlign: "left",
           fontSize: "11px",
-          color: FOOTER_TEXT,
+          color: "#C2BDB1", // >4.5:1 on the sidebar background
           fontWeight: 400,
           letterSpacing: "0.3px",
           boxSizing: "border-box",
-          opacity: 0.5,
         }}
       >
         {content(year)}

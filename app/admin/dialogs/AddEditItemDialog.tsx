@@ -136,7 +136,7 @@ export default function AddEditItemDialog({
 
               {!thumbnailDataUrl && (
                 <Stack direction="row" alignItems="center" spacing={1.5}>
-                  <IconButton onClick={() => fileInputRef.current?.click()} sx={UPLOAD_BTN_SX}>
+                  <IconButton onClick={() => fileInputRef.current?.click()} aria-label="Upload thumbnail" sx={UPLOAD_BTN_SX}>
                     <AddIcon />
                   </IconButton>
                   <Typography variant="caption" color="text.secondary">
@@ -153,12 +153,12 @@ export default function AddEditItemDialog({
               />
 
               {imageError && (
-                <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+                <Typography variant="caption" color="error" display="block" role="alert" sx={{ mt: 0.5 }}>
                   {imageError}
                 </Typography>
               )}
               {compressed && (
-                <Typography variant="caption" display="block" sx={{ mt: 0.5, color: "#f59e0b" }}>
+                <Typography variant="caption" display="block" role="status" sx={{ mt: 0.5, color: "#7A5C00" }}>
                   Image was compressed to meet the 700 KB limit.
                 </Typography>
               )}
@@ -180,9 +180,10 @@ export default function AddEditItemDialog({
                     <IconButton
                       size="small"
                       onClick={clearImage}
+                      aria-label="Remove thumbnail"
                       sx={{ position: "absolute", top: 0, right: 0, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
                     >
-                      ✕
+                      <span aria-hidden="true">✕</span>
                     </IconButton>
                   </Box>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1 }}>

@@ -52,9 +52,14 @@ const SECTION_HEADER_SX = {
   px: 2,
   py: 1.5,
   cursor: "pointer",
-  bgcolor: "#A19A8C",
+  bgcolor: "#5E5A50", // white text on this is >7:1
   userSelect: "none",
-  "&:hover": { bgcolor: "#918B7E" },
+  "&:hover": { bgcolor: "#4E4B43" },
+  width: "100%",
+  border: "none",
+  font: "inherit",
+  textAlign: "left",
+  "&:focus-visible": { outline: "3px solid #000054", outlineOffset: -3, boxShadow: "inset 0 0 0 5px #fff" },
 } as const;
 
 export default function SearchLinkDialog({
@@ -122,18 +127,26 @@ export default function SearchLinkDialog({
       <DialogContent sx={{ padding: "0 !important" }}>
 
         {/* Search existing section */}
-        <Box onClick={() => setSearchExpanded(!searchExpanded)} sx={SECTION_HEADER_SX}>
-          <Typography sx={{ fontWeight: 700, fontSize: "0.8rem", color: "#ffffff", letterSpacing: "0.08em" }}>
+        <Box
+          component="button"
+          type="button"
+          onClick={() => setSearchExpanded(!searchExpanded)}
+          aria-expanded={searchExpanded}
+          aria-controls="search-existing-panel"
+          sx={SECTION_HEADER_SX}
+        >
+          <Typography component="span" sx={{ fontWeight: 700, fontSize: "0.8rem", color: "#ffffff", letterSpacing: "0.08em" }}>
             SEARCH EXISTING {levelPluralName.toUpperCase()}
           </Typography>
           {searchExpanded
             ? <ExpandLessIcon sx={{ color: "#ffffff", fontSize: 20 }} />
             : <ExpandMoreIcon sx={{ color: "#ffffff", fontSize: 20 }} />}
         </Box>
-        <Collapse in={searchExpanded}>
+        <Collapse in={searchExpanded} id="search-existing-panel">
           <Stack spacing={1.5} sx={{ p: 2 }}>
             <TextField
               placeholder={`Search ${levelPluralName.toLowerCase()}...`}
+              inputProps={{ "aria-label": `Search ${levelPluralName.toLowerCase()}` }}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               fullWidth
@@ -159,6 +172,7 @@ export default function SearchLinkDialog({
                     <ListItemAvatar>
                       <Avatar
                         src={item.thumbnailUrl}
+                        alt=""
                         variant="rounded"
                         sx={{ width: 36, height: 36, bgcolor: "grey.100" }}
                       >
@@ -184,17 +198,21 @@ export default function SearchLinkDialog({
 
         {/* Add new section */}
         <Box
+          component="button"
+          type="button"
           onClick={() => setCreateExpanded(!createExpanded)}
+          aria-expanded={createExpanded}
+          aria-controls="add-new-panel"
           sx={{ ...SECTION_HEADER_SX, borderTop: "1px solid #C8C4BB" }}
         >
-          <Typography sx={{ fontWeight: 700, fontSize: "0.8rem", color: "#ffffff", letterSpacing: "0.08em" }}>
+          <Typography component="span" sx={{ fontWeight: 700, fontSize: "0.8rem", color: "#ffffff", letterSpacing: "0.08em" }}>
             ADD NEW {levelSingularName.toUpperCase()}
           </Typography>
           {createExpanded
             ? <ExpandLessIcon sx={{ color: "#ffffff", fontSize: 20 }} />
             : <ExpandMoreIcon sx={{ color: "#ffffff", fontSize: 20 }} />}
         </Box>
-        <Collapse in={createExpanded}>
+        <Collapse in={createExpanded} id="add-new-panel">
           <Stack spacing={2} sx={{ p: 2 }}>
             <TextField
               label="Name"
@@ -221,7 +239,7 @@ export default function SearchLinkDialog({
               </Typography>
               {!newThumbnailDataUrl ? (
                 <Stack direction="row" alignItems="center" spacing={1.5}>
-                  <IconButton onClick={() => fileInputRef.current?.click()} sx={UPLOAD_BTN_SX}>
+                  <IconButton onClick={() => fileInputRef.current?.click()} aria-label="Upload thumbnail" sx={UPLOAD_BTN_SX}>
                     <AddIcon />
                   </IconButton>
                   <Typography variant="caption" color="text.secondary">
@@ -239,9 +257,10 @@ export default function SearchLinkDialog({
                   <IconButton
                     size="small"
                     onClick={() => setNewThumbnailDataUrl("")}
-                    sx={{ position: "absolute", top: -6, right: -6, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" }, width: 20, height: 20, fontSize: "0.65rem" }}
+                    aria-label="Remove thumbnail"
+                    sx={{ position: "absolute", top: -6, right: -6, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" }, width: 24, height: 24, fontSize: "0.65rem" }}
                   >
-                    ✕
+                    <span aria-hidden="true">✕</span>
                   </IconButton>
                 </Box>
               )}

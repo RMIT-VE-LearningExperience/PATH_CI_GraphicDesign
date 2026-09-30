@@ -53,25 +53,23 @@ export default function EmbedDialog({ open, onClose, url, itemName }: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: DIALOG_PAPER_SX }}>
       <DialogTitle sx={{ bgcolor: "#f2f2f2", borderBottom: "2px solid #E5E1D7", py: 2.5 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: "#000054", fontSize: "1.1rem" }}>
+        <Typography component="span" variant="h6" sx={{ display: "block", fontWeight: 700, color: "#000054", fontSize: "1.1rem" }}>
           Embed in Canvas LMS
         </Typography>
-        <Typography variant="body2" color="text.secondary">{itemName}</Typography>
+        <Typography component="span" variant="body2" color="text.secondary" sx={{ display: "block" }}>{itemName}</Typography>
       </DialogTitle>
       <DialogContent sx={{ paddingTop: "24px !important", bgcolor: "#ffffff" }}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={2}>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>Width</Typography>
-              <TextField size="small" fullWidth value={width} onChange={(e) => setWidth(e.target.value)} />
+              <TextField label="Width" size="small" fullWidth value={width} onChange={(e) => setWidth(e.target.value)} />
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>Height (px)</Typography>
-              <TextField size="small" fullWidth value={height} onChange={(e) => setHeight(e.target.value)} />
+              <TextField label="Height (px)" size="small" fullWidth value={height} onChange={(e) => setHeight(e.target.value)} />
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>Preset</Typography>
               <TextField
+                label="Preset"
                 select
                 size="small"
                 fullWidth
@@ -112,6 +110,9 @@ export default function EmbedDialog({ open, onClose, url, itemName }: Props) {
           </Box>
         </Stack>
       </DialogContent>
+      <Box role="status" sx={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
+        {copied ? "Embed code copied to clipboard" : ""}
+      </Box>
       <DialogActions sx={{ ...DIALOG_ACTIONS_SX, gap: 1 }}>
         <Button
           variant="contained"

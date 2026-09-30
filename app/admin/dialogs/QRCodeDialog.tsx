@@ -65,10 +65,10 @@ export default function QRCodeDialog({ open, onClose, url, itemName }: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: DIALOG_PAPER_SX }}>
       <DialogTitle sx={{ bgcolor: "#f2f2f2", borderBottom: "2px solid #E5E1D7", py: 2.5 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: "#000054", fontSize: "1.1rem" }}>
+        <Typography component="span" variant="h6" sx={{ display: "block", fontWeight: 700, color: "#000054", fontSize: "1.1rem" }}>
           QR Code
         </Typography>
-        <Typography variant="body2" color="text.secondary">{itemName}</Typography>
+        <Typography component="span" variant="body2" color="text.secondary" sx={{ display: "block" }}>{itemName}</Typography>
       </DialogTitle>
       <DialogContent sx={{ paddingTop: "24px !important", bgcolor: "#ffffff" }}>
         <Stack alignItems="center" spacing={2}>
@@ -76,7 +76,7 @@ export default function QRCodeDialog({ open, onClose, url, itemName }: Props) {
             <Box
               component="img"
               src={qrDataUrl}
-              alt="QR code"
+              alt={`QR code linking to ${itemName}`}
               sx={{
                 maxWidth: 340,
                 width: "100%",
@@ -87,7 +87,7 @@ export default function QRCodeDialog({ open, onClose, url, itemName }: Props) {
               }}
             />
           ) : (
-            <Box sx={{ width: 340, height: 380, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Box role="status" sx={{ width: 340, height: 380, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Typography variant="body2" color="text.secondary">Generating…</Typography>
             </Box>
           )}

@@ -20,6 +20,7 @@ import {
 import {
   ArrowBackIosNew as CollapseIcon,
   ArrowForwardIos as ExpandIcon,
+  AutoAwesome as AutoAwesomeIcon,
   Check as CheckIcon,
   DeleteOutline as DeleteOutlineIcon,
   Home as HomeIcon,
@@ -60,10 +61,19 @@ type Props = {
 const BG = "#45443F";
 const TEXT = "#E5E1D7";
 const MUTED = "#C2BDB1";
-const ACTIVE_BG = "rgba(0, 0, 84, 0.25)";
+const ACTIVE_BG = "rgba(184, 184, 209, 0.25)";
 const HOVER_BG = "rgba(255, 255, 255, 0.1)";
 const ACTIVE_TEXT = "#f2f2f2";
-const TEAL = "#000054";
+const TEAL = "#000054"; // fills behind white text
+// Navy is too dark to read against the sidebar background, so text, borders
+// and focus indicators drawn on it use this light tint instead (>4.5:1)
+const ACCENT = "#b8b8d1";
+const focusRingSx = {
+  "& button:focus-visible, & a:focus-visible, & [role='button']:focus-visible": {
+    outline: `2px solid ${ACCENT}`,
+    outlineOffset: 2,
+  },
+};
 const EXPANDED_WIDTH = 300;
 const COLLAPSED_WIDTH = 80;
 
@@ -149,7 +159,10 @@ export default function Sidebar({
   if (collapsed) {
     return (
       <Box
+        component="nav"
+        aria-label="Dashboard navigation"
         sx={{
+          ...focusRingSx,
           width: COLLAPSED_WIDTH,
           minHeight: "100vh",
           bgcolor: BG,
@@ -162,7 +175,7 @@ export default function Sidebar({
       >
         <Box sx={{ width: "100%", display: "flex", justifyContent: "flex-end", px: 1, mb: 1 }}>
           <Tooltip title="Expand sidebar" placement="right">
-            <IconButton size="small" onClick={toggleCollapsed} sx={{ color: MUTED, "&:hover": { color: TEXT } }}>
+            <IconButton size="small" aria-label="Expand sidebar" onClick={toggleCollapsed} sx={{ color: MUTED, "&:hover": { color: TEXT } }}>
               <ExpandIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
@@ -173,6 +186,8 @@ export default function Sidebar({
           <Tooltip title="Home" placement="right">
             <IconButton
               onClick={onGoHome}
+              aria-label="Home"
+              aria-current={atHome ? "page" : undefined}
               sx={{
                 width: 50, height: 50, borderRadius: 1,
                 color: atHome ? ACTIVE_TEXT : MUTED,
@@ -188,6 +203,7 @@ export default function Sidebar({
           <Tooltip title="Preview from Start" placement="right">
             <IconButton
               onClick={() => window.open("/?home=1", "_blank")}
+              aria-label="Preview from start (opens in a new tab)"
               sx={{ width: 50, height: 50, borderRadius: 1, color: MUTED, "&:hover": { bgcolor: HOVER_BG } }}
             >
               <VisibilityIcon sx={{ fontSize: 24 }} />
@@ -198,6 +214,7 @@ export default function Sidebar({
           <Tooltip title="Preview Current Page" placement="right">
             <IconButton
               onClick={onPreview}
+              aria-label="Preview current page"
               sx={{ width: 50, height: 50, borderRadius: 1, color: MUTED, "&:hover": { bgcolor: HOVER_BG } }}
             >
               <PageviewIcon sx={{ fontSize: 24 }} />
@@ -212,16 +229,21 @@ export default function Sidebar({
           {shownItems.map((item) => (
             <Tooltip key={item.id} title={item.name} placement="right">
               <Box
+                component="button"
+                type="button"
                 onClick={() => onNavigateLevel1(item)}
-                sx={{ display: "flex", justifyContent: "center", cursor: "pointer" }}
+                aria-label={item.name}
+                aria-current={currentLevel1ItemId === item.id ? "page" : undefined}
+                sx={{ display: "flex", justifyContent: "center", cursor: "pointer", background: "none", border: "none", p: 0, borderRadius: 1 }}
               >
                 <Avatar
                   src={item.thumbnailUrl}
+                  alt=""
                   variant="rounded"
                   sx={{
                     width: 40, height: 40,
                     border: currentLevel1ItemId === item.id ? "2px solid" : "1px solid transparent",
-                    borderColor: TEAL,
+                    borderColor: ACCENT,
                     bgcolor: currentLevel1ItemId === item.id ? ACTIVE_BG : "#62615C",
                     transition: "all 180ms ease",
                     "&:hover": { boxShadow: `0 0 0 2px rgba(0,0,84,0.4)` },
@@ -237,7 +259,8 @@ export default function Sidebar({
               <IconButton
                 onClick={onGoHome}
                 size="small"
-                sx={{ width: 40, height: 40, borderRadius: 1, color: TEAL, "&:hover": { bgcolor: ACTIVE_BG } }}
+                aria-label="More"
+                sx={{ width: 40, height: 40, borderRadius: 1, color: ACCENT, "&:hover": { bgcolor: ACTIVE_BG } }}
               >
                 ⋯
               </IconButton>
@@ -257,6 +280,8 @@ export default function Sidebar({
                 >
                   <IconButton
                     onClick={() => onGlobalList(level.id)}
+                    aria-label={level.type === "type1" ? `Full ${level.name} List` : `${level.name} Management`}
+                    aria-current={globalListLevelId === level.id ? "page" : undefined}
                     sx={{
                       width: 50, height: 50, borderRadius: 1,
                       color: globalListLevelId === level.id ? ACTIVE_TEXT : MUTED,
@@ -274,9 +299,24 @@ export default function Sidebar({
 
         <Divider sx={{ borderColor: "rgba(255,255,255,0.15)", width: "80%", my: 1.5 }} />
 
+        <Tooltip title="Image Alt Text (VAL)" placement="right">
+          <IconButton
+            onClick={() => { window.location.assign("/admin/alt-text"); }}
+            aria-label="Image Alt Text (VAL)"
+            sx={{
+              width: 50, height: 50, borderRadius: 1, color: MUTED,
+              "&:hover": { bgcolor: HOVER_BG },
+            }}
+          >
+            <AutoAwesomeIcon sx={{ fontSize: 24 }} />
+          </IconButton>
+        </Tooltip>
+
         <Tooltip title="Deleted Items" placement="right">
           <IconButton
             onClick={onShowDeleted}
+            aria-label="Deleted Items"
+            aria-current={showDeleted ? "page" : undefined}
             sx={{
               width: 50, height: 50, borderRadius: 1,
               color: showDeleted ? ACTIVE_TEXT : MUTED,
@@ -295,7 +335,10 @@ export default function Sidebar({
 
   return (
     <Box
+      component="nav"
+      aria-label="Dashboard navigation"
       sx={{
+        ...focusRingSx,
         width: EXPANDED_WIDTH,
         minHeight: "100vh",
         bgcolor: BG,
@@ -315,7 +358,7 @@ export default function Sidebar({
             background: "none", border: "none", cursor: "pointer",
             color: TEXT, fontWeight: 600, fontSize: "1.1rem",
             textAlign: "left", p: 0, flex: 1,
-            "&:hover": { color: TEAL },
+            "&:hover": { color: ACCENT },
           }}
         >
           <HomeIcon sx={{ fontSize: 22 }} />
@@ -325,6 +368,7 @@ export default function Sidebar({
           <IconButton
             size="small"
             onClick={toggleCollapsed}
+            aria-label="Collapse sidebar"
             sx={{ p: 0.5, color: TEXT, "&:hover": { bgcolor: HOVER_BG } }}
           >
             <CollapseIcon sx={{ fontSize: 16 }} />
@@ -372,11 +416,11 @@ export default function Sidebar({
                 "& .MuiOutlinedInput-root": {
                   "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
                   "&:hover fieldset": { borderColor: "rgba(255,255,255,0.3)" },
-                  "&.Mui-focused fieldset": { borderColor: TEAL },
+                  "&.Mui-focused fieldset": { borderColor: ACCENT },
                 },
                 "& .MuiInputLabel-root": {
                   color: "rgba(255,255,255,0.6)",
-                  "&.Mui-focused": { color: TEAL },
+                  "&.Mui-focused": { color: ACCENT },
                 },
               }}
             />
@@ -393,23 +437,23 @@ export default function Sidebar({
                 "& .MuiOutlinedInput-root": {
                   "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
                   "&:hover fieldset": { borderColor: "rgba(255,255,255,0.3)" },
-                  "&.Mui-focused fieldset": { borderColor: TEAL },
+                  "&.Mui-focused fieldset": { borderColor: ACCENT },
                 },
                 "& .MuiInputLabel-root": {
                   color: "rgba(255,255,255,0.6)",
-                  "&.Mui-focused": { color: TEAL },
+                  "&.Mui-focused": { color: ACCENT },
                 },
               }}
             />
 
             {(homepageDirty || homepageSaving || homepageSaved) && (
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} alignItems="center" role="status">
                 {homepageSaving ? (
-                  <CircularProgress size={16} sx={{ color: TEAL }} />
+                  <CircularProgress size={16} sx={{ color: ACCENT }} />
                 ) : homepageSaved ? (
                   <Stack direction="row" spacing={0.5} alignItems="center">
-                    <CheckIcon sx={{ fontSize: 16, color: "#1A7A2E" }} />
-                    <Typography variant="caption" sx={{ color: "#1A7A2E" }}>Saved</Typography>
+                    <CheckIcon aria-hidden="true" sx={{ fontSize: 16, color: "#7FD98F" }} />
+                    <Typography variant="caption" sx={{ color: "#7FD98F" }}>Saved</Typography>
                   </Stack>
                 ) : (
                   <>
@@ -452,27 +496,44 @@ export default function Sidebar({
       {/* Level 1 items section */}
       <Box>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-          <Typography
-            variant="subtitle2"
-            fontWeight={600}
+          <Box
+            component="button"
+            type="button"
             onClick={onGoHome}
             sx={{
-              color: TEXT, textTransform: "uppercase",
-              fontSize: "0.75rem", letterSpacing: "0.5px",
-              cursor: "pointer", "&:hover": { color: TEAL },
+              background: "none", border: "none", p: 0,
+              color: TEXT, textTransform: "uppercase", textAlign: "left",
+              fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.5px", fontFamily: "inherit",
+              cursor: "pointer", "&:hover": { color: ACCENT },
             }}
           >
             {level1Name}
-          </Typography>
+          </Box>
         </Box>
 
         {level1Items.length > 0 ? (
           <>
             <List sx={{ p: 0, borderRadius: 1 }}>
               {shownItems.map((item) => (
-                <ListItem key={item.id} disablePadding>
+                <ListItem
+                  key={item.id}
+                  disablePadding
+                  secondaryAction={
+                    <IconButton
+                      size="small"
+                      edge="end"
+                      aria-label={`More actions for ${item.name}`}
+                      aria-haspopup="menu"
+                      onClick={(e) => { onLevel1ItemMenu(item, e.currentTarget); }}
+                      sx={{ color: TEXT, "&:hover": { color: ACCENT } }}
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
+                  }
+                >
                   <ListItemButton
                     selected={currentLevel1ItemId === item.id}
+                    aria-current={currentLevel1ItemId === item.id ? "page" : undefined}
                     onClick={() => onNavigateLevel1(item)}
                     sx={{
                       borderRadius: 1,
@@ -487,10 +548,11 @@ export default function Sidebar({
                     <ListItemAvatar sx={{ minWidth: 40 }}>
                       <Avatar
                         src={item.thumbnailUrl}
+                        alt=""
                         variant="rounded"
                         sx={{
                           width: 32, height: 32, bgcolor: "#62615C",
-                          border: currentLevel1ItemId === item.id ? "2px solid #000054" : "1px solid transparent",
+                          border: currentLevel1ItemId === item.id ? `2px solid ${ACCENT}` : "1px solid transparent",
                         }}
                       >
                         <ImageIcon sx={{ fontSize: 14 }} />
@@ -500,13 +562,6 @@ export default function Sidebar({
                       primary={item.name}
                       sx={{ "& .MuiListItemText-primary": { color: "inherit", fontSize: "0.875rem" } }}
                     />
-                    <IconButton
-                      size="small"
-                      onClick={(e) => { e.stopPropagation(); onLevel1ItemMenu(item, e.currentTarget); }}
-                      sx={{ ml: 0.5, color: "inherit", "&:hover": { color: TEAL } }}
-                    >
-                      <MoreVertIcon fontSize="small" />
-                    </IconButton>
                   </ListItemButton>
                 </ListItem>
               ))}
@@ -518,9 +573,8 @@ export default function Sidebar({
                 size="small"
                 onClick={onGoHome}
                 sx={{
-                  mt: 0.5, textTransform: "none", color: TEAL,
-                  borderColor: "rgba(0,0,84,0.25)",
-                  "&:hover": { bgcolor: "rgba(0,0,84,0.1)", borderColor: "rgba(0,0,84,0.4)" },
+                  mt: 0.5, textTransform: "none", color: ACCENT,
+                  "&:hover": { bgcolor: HOVER_BG },
                 }}
               >
                 More
@@ -569,6 +623,16 @@ export default function Sidebar({
 
       <Button
         fullWidth
+        startIcon={<AutoAwesomeIcon />}
+        variant="outlined"
+        onClick={() => { window.location.assign("/admin/alt-text"); }}
+        sx={{ ...outlinedBtnSx, mb: 1 }}
+      >
+        Image Alt Text (VAL)
+      </Button>
+
+      <Button
+        fullWidth
         startIcon={<DeleteOutlineIcon />}
         variant={showDeleted ? "contained" : "outlined"}
         onClick={onShowDeleted}
@@ -586,7 +650,7 @@ export default function Sidebar({
 
       {/* Footer */}
       <Box sx={{ mt: "auto", pt: 3 }}>
-        <div style={{ fontSize: 11, color: "#fff", opacity: 0.5, letterSpacing: "0.3px" }}>
+        <div style={{ fontSize: 11, color: "#C2BDB1", letterSpacing: "0.3px" }}>
           © {new Date().getFullYear()} Designed by the{" "}
           <a href="mailto:dmd.cove@rmit.edu.au" style={{ color: "#fff", textDecoration: "underline" }}>
             Digital Design &amp; Media Team
