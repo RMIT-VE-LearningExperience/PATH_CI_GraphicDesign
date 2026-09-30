@@ -6,6 +6,7 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <Box
+      component="main"
       sx={{
         minHeight: "100vh",
         bgcolor: "#f2f2f2",
@@ -15,7 +16,7 @@ export default function NotFound() {
       }}
     >
       <Stack spacing={3} alignItems="center" sx={{ textAlign: "center", px: 3 }}>
-        <Typography variant="h4" fontWeight={700} sx={{ color: "#45443F" }}>
+        <Typography variant="h4" component="h1" fontWeight={700} sx={{ color: "#45443F" }}>
           Page not found
         </Typography>
         <Typography variant="body1" sx={{ color: "#62615C" }}>

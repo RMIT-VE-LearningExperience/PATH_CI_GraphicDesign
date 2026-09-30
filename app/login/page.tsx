@@ -123,6 +123,7 @@ export default function LoginPage() {
 
   return (
     <Box
+      component="main"
       sx={{
         minHeight: "100vh",
         display: "flex",
@@ -150,16 +151,17 @@ export default function LoginPage() {
             setRegSuccess(false);
           }}
           variant="fullWidth"
+          aria-label="Admin access"
           sx={{ borderBottom: "1px solid #E5E1D7" }}
         >
-          <Tab label="Login" />
-          <Tab label="Request" />
+          <Tab label="Login" id="login-tab" aria-controls="login-panel" />
+          <Tab label="Request" id="request-tab" aria-controls="request-panel" />
         </Tabs>
 
         <Box sx={{ padding: 4 }}>
           {tab === 0 && (
-            <Stack spacing={2}>
-              <Typography variant="h5" fontWeight={700} textAlign="center">
+            <Stack spacing={2} role="tabpanel" id="login-panel" aria-labelledby="login-tab">
+              <Typography variant="h5" component="h1" fontWeight={700} textAlign="center">
                 Admin Login
               </Typography>
 
@@ -192,8 +194,8 @@ export default function LoginPage() {
           )}
 
           {tab === 1 && (
-            <Stack spacing={2}>
-              <Typography variant="h5" fontWeight={700} textAlign="center">
+            <Stack spacing={2} role="tabpanel" id="request-panel" aria-labelledby="request-tab">
+              <Typography variant="h5" component="h1" fontWeight={700} textAlign="center">
                 Request for Access
               </Typography>
 

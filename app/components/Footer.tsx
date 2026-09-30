@@ -35,7 +35,7 @@ export default function Footer({ year, isAdmin }: { year: number; isAdmin: boole
   }
 
   return (
-    <div
+    <footer
       style={{
         width: "100%",
         backgroundColor: FOOTER_BG,
@@ -49,6 +49,6 @@ export default function Footer({ year, isAdmin }: { year: number; isAdmin: boole
       }}
     >
       {content(year)}
-    </div>
+    </footer>
   );
 }

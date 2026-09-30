@@ -20,13 +20,14 @@ import {
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
+  Close as CloseIcon,
   Home as HomeIcon,
   Image as ImageIcon,
   Info as InfoIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
   Remove as RemoveIcon,
 } from "@mui/icons-material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { trackEvent } from "./GoogleAnalytics";
 import Footer from "./Footer";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
@@ -47,7 +48,36 @@ const colors = {
   cardShadowHover: "0 8px 16px rgba(69, 68, 63, 0.12)",
 };
 
+// Visually hides content while keeping it in the accessibility tree.
+const srOnlySx = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+} as const;
+
+// Applied to the <main> landmark, which is given programmatic focus after
+// every in-app navigation. :focus-visible (not :focus) keeps the ring hidden
+// after a mouse click and shown after keyboard activation.
+const mainFocusSx = {
+  outline: "none",
+  "&:focus-visible": {
+    outline: `3px solid ${colors.primary}`,
+    outlineOffset: "-2px",
+  },
+} as const;
+
 // ── Helpers ───────────────────────────────────────────────────────────
+
+function scrollToTop() {
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+}
 
 function getVideoEmbedUrl(url: string): string | null {
   const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
@@ -67,13 +97,59 @@ function sanitizeHtml(html: string): string {
     });
 }
 
-// ── Nav icon button ───────────────────────────────────────────────────
+// ── Skip link ─────────────────────────────────────────────────────────
+// Hidden until focused, so keyboard users can jump past the preview banner
+// and top navigation straight to the main content of the current view.
 
-function NavIconButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function SkipLink() {
+  return (
+    <Box
+      component="a"
+      href="#main-content"
+      sx={{
+        ...srOnlySx,
+        "&:focus": {
+          position: "fixed",
+          top: 8,
+          left: 8,
+          width: "auto",
+          height: "auto",
+          margin: 0,
+          padding: "8px 16px",
+          overflow: "visible",
+          clip: "auto",
+          whiteSpace: "normal",
+          zIndex: 2000,
+          bgcolor: colors.darkBg,
+          color: "#fff",
+          borderRadius: 1,
+          fontWeight: 700,
+          textDecoration: "none",
+        },
+      }}
+    >
+      Skip to content
+    </Box>
+  );
+}
+
+// ── Nav icon button ───────────────────////////////////////////////////
+
+function NavIconButton({
+  onClick,
+  ariaLabel,
+  children,
+}: {
+  onClick: () => void;
+  ariaLabel: string;
+  children: React.ReactNode;
+}) {
   return (
     <IconButton
       onClick={onClick}
+      aria-label={ariaLabel}
       sx={{
+        "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: 2 },
         color: colors.text,
         border: `1px solid ${colors.lightBorder}`,
         borderRadius: "6px",
@@ -102,11 +178,12 @@ function ItemCard({
   onClick: () => void;
 }) {
   const isUnpublished = isPreview && !isPublished;
+  const titleId = useId();
 
   return (
     <Card
-      onClick={onClick}
       sx={{
+        position: "relative",
         cursor: "pointer",
         height: "100%",
         borderRadius: "8px",
@@ -116,8 +193,26 @@ function ItemCard({
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         "&:hover": { boxShadow: colors.cardShadowHover, transform: "translateY(-4px)" },
         "&:active": { transform: "translateY(-2px)" },
+        "@media (prefers-reduced-motion: reduce)": {
+          transition: "none",
+          "&:hover, &:active": { transform: "none" },
+        },
       }}
     >
+      {/* Card-wide native button so the whole card is keyboard/AT operable */}
+      <Box
+        component="button"
+        type="button"
+        onClick={onClick}
+        aria-labelledby={titleId}
+        sx={{
+          position: "absolute", inset: 0, zIndex: 1,
+          width: "100%", height: "100%", m: 0, p: 0,
+          border: "none", background: "none", appearance: "none",
+          cursor: "pointer", borderRadius: "8px",
+          "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: "-3px" },
+        }}
+      />
       {/* Thumbnail */}
       <Box
         sx={{
@@ -131,7 +226,7 @@ function ItemCard({
         {item.thumbnailUrl ? (
           <Image
             src={item.thumbnailUrl}
-            alt={item.name}
+            alt=""
             fill
             style={{ objectFit: "cover" }}
             sizes="(max-width: 600px) 100vw, (max-width: 960px) 50vw, 33vw"
@@ -159,6 +254,8 @@ function ItemCard({
           <Stack spacing={1.5}>
             <Typography
               variant="h6"
+              component="h2"
+              id={titleId}
               sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 600, color: colors.text, lineHeight: 1.4 }}
             >
               {item.name}
@@ -185,6 +282,8 @@ function ItemCard({
           <Stack direction="row" spacing={1} alignItems="flex-start">
             <Typography
               variant="h6"
+              component="h2"
+              id={titleId}
               sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 600, color: colors.text, flex: 1, lineHeight: 1.4 }}
             >
               {item.name}
@@ -193,8 +292,13 @@ function ItemCard({
               <Tooltip title={item.description} arrow placement="top">
                 <IconButton
                   size="small"
-                  onClick={(e) => e.stopPropagation()}
-                  sx={{ color: colors.primary, width: 24, height: 24, "&:hover": { bgcolor: "rgba(0,0,84,0.1)" } }}
+                  aria-label={`More information about ${item.name}`}
+                  sx={{
+                    position: "relative", zIndex: 2,
+                    color: colors.primary, width: 44, height: 44, m: "-10px",
+                    "&:hover": { bgcolor: "rgba(0,0,84,0.1)" },
+                    "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: -3 },
+                  }}
                 >
                   <InfoIcon sx={{ fontSize: 18 }} />
                 </IconButton>
@@ -204,6 +308,36 @@ function ItemCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Step image (click to enlarge) ─────────────────────────────────────
+
+function StepImage({ src, alt, onClick }: { src: string; alt: string; onClick: () => void }) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={onClick}
+      aria-label={`Enlarge image${alt ? `: ${alt}` : ""}`}
+      sx={{
+        position: "relative", width: "100%", paddingBottom: "60%",
+        overflow: "hidden", borderRadius: 1, bgcolor: "#f2f2f2",
+        display: "block", m: 0, p: 0, border: "none",
+        font: "inherit", appearance: "none",
+        cursor: "pointer", transition: "all 0.2s ease",
+        "&:hover": { boxShadow: colors.cardShadowHover },
+        "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: 2 },
+      }}
+    >
+      <Image
+        src={src}
+        alt=""
+        fill
+        style={{ objectFit: "contain" }}
+        sizes="(max-width: 600px) 100vw, (max-width: 960px) 90vw, 800px"
+      />
+    </Box>
   );
 }
 
@@ -234,12 +368,17 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
   const [selectionStack, setSelectionStack] = useState<NavEntry[]>([]);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
-  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
+  // Debounced copy of activeStepIndex for the screen-reader status region,
+  // so scroll jitter doesn't trigger a flood of announcements
+  const [announcedStepIndex, setAnnouncedStepIndex] = useState(0);
+  const [enlargedImage, setEnlargedImage] = useState<{ url: string; alt: string } | null>(null);
   const [imgZoom, setImgZoom] = useState(1);
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const visibleStepsRef = useRef(new Set<number>());
+  const visibleStepsRef = useRef(new Map<number, number>());
+  const mainRef = useRef<HTMLDivElement>(null);
+  const isFirstRenderRef = useRef(true);
   const lastTrackedStep = useRef(-1);
 
   // ── Derived ─────────────────────────────────────────────────────────
@@ -279,6 +418,16 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     if (!state || !atSteps || !parentEntry) return [];
     return state.steps[parentEntry.itemId] ?? [];
   }, [state, atSteps, parentEntry]);
+
+  // Name of whatever the user is looking at now, for the document title
+  const currentPageName = useMemo((): string => {
+    if (!state) return "";
+    if (selectionStack.length === 0) return state.homepageTitle || activeLevels[0]?.name || "Guide";
+    const parentItem = parentEntry
+      ? (state.items[parentLevel?.id ?? ""] ?? []).find((i) => i.id === parentEntry.itemId)
+      : undefined;
+    return parentItem?.name ?? currentLevel?.sectionTitle ?? "";
+  }, [state, selectionStack, activeLevels, parentEntry, parentLevel, currentLevel]);
 
   const itemPublishedMap = useMemo((): Record<string, boolean> => {
     if (!state || !currentLevel) return {};
@@ -473,20 +622,58 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
         entries.forEach((entry) => {
           const idx = Number(entry.target.getAttribute("data-step-index"));
           if (entry.isIntersecting) {
-            visibleStepsRef.current.add(idx);
+            visibleStepsRef.current.set(idx, entry.intersectionRatio);
           } else {
             visibleStepsRef.current.delete(idx);
           }
         });
-        const visible = [...visibleStepsRef.current].sort((a, b) => a - b);
-        if (visible.length > 0) setActiveStepIndex(visible[0]);
+        // Pick the most visible step (lowest index wins ties) so tall step
+        // cards don't keep the previous step active after scrolling past it
+        let best = -1;
+        let bestRatio = -1;
+        [...visibleStepsRef.current.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .forEach(([idx, ratio]) => {
+            if (ratio > bestRatio) { best = idx; bestRatio = ratio; }
+          });
+        if (best >= 0) setActiveStepIndex(best);
       },
-      { threshold: 0.2 },
+      { threshold: [0, 0.2, 0.4, 0.6, 0.8, 1] },
     );
 
     stepRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
   }, [atSteps, currentSteps]);
+
+  // ── Screen-reader step announcements (debounced) ──────────────────────
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAnnouncedStepIndex(activeStepIndex), 800);
+    return () => clearTimeout(timer);
+  }, [activeStepIndex]);
+
+  // ── Title + focus on in-app navigation ────────────────────────────────
+  // A client-side navigation triggers no page load, so screen reader users
+  // get no signal that anything changed unless we update the title and move
+  // focus ourselves. Keyed on selectionStack (not currentPageName) so it only
+  // fires on a real navigation, and skipped on the very first render.
+
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    if (!currentPageName) return;
+    document.title = currentPageName;
+    mainRef.current?.focus();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionStack]);
+
+  // The catch-all route renders this view for unknown slugs, so it is the
+  // app's real 404 page and needs its own title
+  useEffect(() => {
+    if (notFound) document.title = `Page not found · ${state?.homepageTitle || "PATH CI GraphicDesign"}`;
+  }, [notFound, state?.homepageTitle]);
 
   // ── GA step tracking ──────────────────────────────────────────────────
 
@@ -530,7 +717,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     });
 
     saveProgress(newStack);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   }
 
   function handleBack(targetDepth: number) {
@@ -542,7 +729,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     }
 
     saveProgress(newStack);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   }
 
   // ── Preview banner ────────────────────────────────────────────────────
@@ -575,8 +762,9 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
   if (loading) {
     return (
-      <Box sx={{ position: "fixed", inset: 0, bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Box sx={{ position: "relative", display: "inline-flex" }}>
+      <Box role="status" sx={{ position: "fixed", inset: 0, bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Box component="span" sx={srOnlySx}>Loading guide…</Box>
+        <Box aria-hidden="true" sx={{ position: "relative", display: "inline-flex" }}>
           <CircularProgress variant="determinate" value={100} size={48} thickness={4} sx={{ color: "rgba(0,0,84,0.15)" }} />
           <CircularProgress size={48} thickness={4} sx={{ color: colors.primary, position: "absolute", left: 0, "& .MuiCircularProgress-circle": { strokeLinecap: "round" } }} />
         </Box>
@@ -588,9 +776,9 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
   if (notFound) {
     return (
-      <Box sx={{ minHeight: "100vh", bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Box component="main" sx={{ minHeight: "100vh", bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Stack spacing={3} alignItems="center" sx={{ textAlign: "center", px: 3 }}>
-          <Typography variant="h4" fontWeight={700} color={colors.text}>Item not found</Typography>
+          <Typography variant="h4" component="h1" fontWeight={700} color={colors.text}>Item not found</Typography>
           <Typography variant="body1" color={colors.lightText}>
             This link is no longer available or has been removed.
           </Typography>
@@ -615,7 +803,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
   if (error) {
     return (
-      <Box sx={{ minHeight: "100vh", bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Box component="main" sx={{ minHeight: "100vh", bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Alert severity="error">{error}</Alert>
       </Box>
     );
@@ -623,7 +811,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
   if (!state?.hierarchyConfigured) {
     return (
-      <Box sx={{ minHeight: "100vh", bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Box component="main" sx={{ minHeight: "100vh", bgcolor: colors.lightBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Alert severity="info">This guide is not yet configured.</Alert>
       </Box>
     );
@@ -643,8 +831,9 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           flexDirection: "column",
         }}
       >
+        <SkipLink />
         {previewBanner}
-        <Container maxWidth="md">
+        <Container maxWidth="md" component="main" id="main-content" ref={mainRef} tabIndex={-1} sx={mainFocusSx}>
           <Stack spacing={2} sx={{ mb: { xs: 5, sm: 6, md: 8 }, textAlign: "center" }}>
             <Typography
               variant="h1"
@@ -718,10 +907,11 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           pb: 0,
         }}
       >
+        <SkipLink />
         {previewBanner}
         <Container maxWidth="md">
-          <Stack direction="row" spacing={1.5} sx={{ mb: { xs: 4, sm: 5 }, alignItems: "center" }}>
-            <NavIconButton onClick={() => handleBack(selectionStack.length - 1)}>
+          <Stack component="nav" aria-label="Guide navigation" direction="row" spacing={1.5} sx={{ mb: { xs: 4, sm: 5 }, alignItems: "center" }}>
+            <NavIconButton onClick={() => handleBack(selectionStack.length - 1)} ariaLabel="Back">
               <ArrowBackIcon />
             </NavIconButton>
             <Stack spacing={0.25} sx={{ flex: 1, textAlign: "center" }}>
@@ -734,46 +924,52 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                 </Typography>
               )}
             </Stack>
-            <NavIconButton onClick={() => handleBack(0)}>
+            <NavIconButton onClick={() => handleBack(0)} ariaLabel="Home">
               <HomeIcon />
             </NavIconButton>
           </Stack>
+          <Box component="main" id="main-content" ref={mainRef} tabIndex={-1} sx={mainFocusSx}>
 
-          {(currentLevel.sectionTitle || currentLevel.sectionSubtitle) && (
-            <Stack spacing={2} sx={{ mb: { xs: 4, sm: 5 }, textAlign: "center" }}>
-              {currentLevel.sectionTitle && (
-                <Typography
-                  variant="h2"
-                  sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.5rem" }, fontWeight: 800, letterSpacing: "-0.02em", color: colors.text }}
-                >
-                  {currentLevel.sectionTitle}
-                </Typography>
-              )}
-              {currentLevel.sectionSubtitle && (
-                <Typography variant="body1" sx={{ fontSize: { xs: "0.95rem", sm: "1.05rem" }, color: colors.lightText, lineHeight: 1.5 }}>
-                  {currentLevel.sectionSubtitle}
-                </Typography>
-              )}
-            </Stack>
-          )}
+            {!currentLevel.sectionTitle && (
+              <Typography component="h1" sx={srOnlySx}>{currentLevel.name}</Typography>
+            )}
+            {(currentLevel.sectionTitle || currentLevel.sectionSubtitle) && (
+              <Stack spacing={2} sx={{ mb: { xs: 4, sm: 5 }, textAlign: "center" }}>
+                {currentLevel.sectionTitle && (
+                  <Typography
+                    variant="h2"
+                    component="h1"
+                    sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.5rem" }, fontWeight: 800, letterSpacing: "-0.02em", color: colors.text }}
+                  >
+                    {currentLevel.sectionTitle}
+                  </Typography>
+                )}
+                {currentLevel.sectionSubtitle && (
+                  <Typography variant="body1" sx={{ fontSize: { xs: "0.95rem", sm: "1.05rem" }, color: colors.lightText, lineHeight: 1.5 }}>
+                    {currentLevel.sectionSubtitle}
+                  </Typography>
+                )}
+              </Stack>
+            )}
 
-          {visibleItems.length === 0 ? (
-            <Alert severity="info">No items available yet.</Alert>
-          ) : (
-            <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
-              {visibleItems.map((item) => (
-                <Grid item xs={12} sm={6} md={4} key={item.id}>
-                  <ItemCard
-                    item={item}
-                    isLastLevel={isLastSelectionLevel}
-                    isPublished={itemPublishedMap[item.id] ?? false}
-                    isPreview={isPreviewMode}
-                    onClick={() => handleSelect(item, currentLevel.id)}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          )}
+            {visibleItems.length === 0 ? (
+              <Alert severity="info">No items available yet.</Alert>
+            ) : (
+              <Grid container spacing={{ xs: 2, sm: 2.5, md: 3 }}>
+                {visibleItems.map((item) => (
+                  <Grid item xs={12} sm={6} md={4} key={item.id}>
+                    <ItemCard
+                      item={item}
+                      isLastLevel={isLastSelectionLevel}
+                      isPublished={itemPublishedMap[item.id] ?? false}
+                      isPreview={isPreviewMode}
+                      onClick={() => handleSelect(item, currentLevel.id)}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
         </Container>
         <Box sx={{ mt: "auto" }}>
           <Footer year={new Date().getFullYear()} isAdmin={false} />
@@ -796,10 +992,11 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     if (currentSteps.length === 0) {
       return (
         <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column", bgcolor: colors.lightBg, py: { xs: 4, sm: 5, md: 7 }, pt: previewPt }}>
+          <SkipLink />
           {previewBanner}
           <Container maxWidth="md">
-            <Stack direction="row" spacing={1.5} sx={{ mb: { xs: 4, sm: 5 }, alignItems: "center" }}>
-              <NavIconButton onClick={() => handleBack(selectionStack.length - 1)}>
+            <Stack component="nav" aria-label="Guide navigation" direction="row" spacing={1.5} sx={{ mb: { xs: 4, sm: 5 }, alignItems: "center" }}>
+              <NavIconButton onClick={() => handleBack(selectionStack.length - 1)} ariaLabel="Back">
                 <ArrowBackIcon />
               </NavIconButton>
               <Stack spacing={0.25} sx={{ flex: 1, textAlign: "center" }}>
@@ -812,13 +1009,15 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   </Typography>
                 )}
               </Stack>
-              <NavIconButton onClick={() => handleBack(0)}>
+              <NavIconButton onClick={() => handleBack(0)} ariaLabel="Home">
                 <HomeIcon />
               </NavIconButton>
             </Stack>
-            <Stack alignItems="center" sx={{ mt: { xs: 6, sm: 8 }, textAlign: "center" }}>
-              <Alert severity="info">Content unavailable, check with staff</Alert>
-            </Stack>
+            <Box component="main" id="main-content" ref={mainRef} tabIndex={-1} sx={mainFocusSx}>
+              <Stack alignItems="center" sx={{ mt: { xs: 6, sm: 8 }, textAlign: "center" }}>
+                <Alert severity="info">Content unavailable, check with staff</Alert>
+              </Stack>
+            </Box>
           </Container>
           <Box sx={{ mt: "auto" }}>
             <Footer year={new Date().getFullYear()} isAdmin={false} />
@@ -829,13 +1028,14 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
     return (
       <Box sx={{ minHeight: "100vh", bgcolor: colors.lightBg }}>
+        <SkipLink />
         {previewBanner}
         <Box sx={{ height: 3, bgcolor: colors.primary, mt: isPreviewMode ? "36px" : 0 }} />
 
         <Box sx={{ py: { xs: 4, sm: 5, md: 7 } }}>
           <Container maxWidth="md">
-            <Stack direction="row" spacing={1.5} sx={{ mb: { xs: 4, sm: 5 }, alignItems: "center" }}>
-              <NavIconButton onClick={() => handleBack(selectionStack.length - 1)}>
+            <Stack component="nav" aria-label="Guide navigation" direction="row" spacing={1.5} sx={{ mb: { xs: 4, sm: 5 }, alignItems: "center" }}>
+              <NavIconButton onClick={() => handleBack(selectionStack.length - 1)} ariaLabel="Back">
                 <ArrowBackIcon />
               </NavIconButton>
               <Stack spacing={0.25} sx={{ flex: 1, textAlign: "center" }}>
@@ -848,118 +1048,114 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   </Typography>
                 )}
               </Stack>
-              <NavIconButton onClick={() => handleBack(0)}>
+              <NavIconButton onClick={() => handleBack(0)} ariaLabel="Home">
                 <HomeIcon />
               </NavIconButton>
             </Stack>
+            <Box component="main" id="main-content" ref={mainRef} tabIndex={-1} sx={mainFocusSx}>
 
-            <Box
-              sx={{
-                position: "sticky",
-                top: isPreviewMode ? "36px" : 0,
-                zIndex: 10,
-                bgcolor: colors.lightBg,
-                pb: 2, pt: 1,
-                mb: { xs: 2, sm: 3 },
-                textAlign: "center",
-              }}
-            >
-              <Typography
-                variant="h2"
-                sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.5rem" }, fontWeight: 800, letterSpacing: "-0.02em", color: colors.text, mb: 1 }}
+              <Box
+                sx={{
+                  position: "sticky",
+                  top: isPreviewMode ? "36px" : 0,
+                  zIndex: 10,
+                  bgcolor: colors.lightBg,
+                  pb: 2, pt: 1,
+                  mb: { xs: 2, sm: 3 },
+                  textAlign: "center",
+                }}
               >
-                {lastItem?.name ?? ""}
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontSize: { xs: "0.9rem", sm: "1rem" }, fontWeight: 600, color: colors.text, letterSpacing: "0.05em" }}
-              >
-                STEP {currentSteps.length === 0 ? 0 : activeStepIndex + 1} OF {currentSteps.length}
-              </Typography>
-            </Box>
+                <Typography
+                  variant="h2"
+                  component="h1"
+                  sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.5rem" }, fontWeight: 800, letterSpacing: "-0.02em", color: colors.text, mb: 1 }}
+                >
+                  {lastItem?.name ?? ""}
+                </Typography>
+                <Typography
+                  variant="body1"
+                  sx={{ fontSize: { xs: "0.9rem", sm: "1rem" }, fontWeight: 600, color: colors.text, letterSpacing: "0.05em" }}
+                >
+                  STEP {currentSteps.length === 0 ? 0 : activeStepIndex + 1} OF {currentSteps.length}
+                </Typography>
+                {/* Debounced screen-reader announcement of the visual counter above */}
+                <Box component="p" role="status" sx={srOnlySx}>
+                  {currentSteps.length > 0 ? `Step ${announcedStepIndex + 1} of ${currentSteps.length}` : ""}
+                </Box>
+              </Box>
 
-            <Stack spacing={{ xs: 3, sm: 4 }} sx={{ pb: { xs: 6, sm: 8 } }}>
-              {currentSteps.map((step, index) => {
-                const embedUrl = step.videoUrl ? getVideoEmbedUrl(step.videoUrl) : null;
-                const isDirectVideo = /\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl ?? "");
-                return (
-                  <Card
-                    key={step.id}
-                    ref={(el) => { stepRefs.current[index] = el; }}
-                    data-step-index={index}
-                    sx={{ borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden" }}
-                  >
-                    <CardContent sx={{ p: { xs: 2.5, sm: 3.5 } }}>
-                      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: { xs: 2, sm: 2.5 } }}>
-                        <Box
-                          sx={{
-                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            width: 40, height: 40, bgcolor: colors.darkBg, color: colors.lightBg,
-                            fontWeight: 700, borderRadius: 1, fontSize: "1.1rem", flexShrink: 0,
-                          }}
-                        >
-                          {index + 1}
-                        </Box>
-                        {step.title && (
-                          <Typography variant="h6" sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 600, color: colors.primary }}>
-                            {step.title}
-                          </Typography>
+              <Stack spacing={{ xs: 3, sm: 4 }} sx={{ pb: { xs: 6, sm: 8 } }}>
+                {currentSteps.map((step, index) => {
+                  const embedUrl = step.videoUrl ? getVideoEmbedUrl(step.videoUrl) : null;
+                  const isDirectVideo = /\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl ?? "");
+                  return (
+                    <Card
+                      key={step.id}
+                      ref={(el) => { stepRefs.current[index] = el; }}
+                      data-step-index={index}
+                      sx={{ borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden" }}
+                    >
+                      <CardContent sx={{ p: { xs: 2.5, sm: 3.5 } }}>
+                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: { xs: 2, sm: 2.5 } }}>
+                          <Box
+                            sx={{
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              width: 40, height: 40, bgcolor: colors.darkBg, color: colors.lightBg,
+                              fontWeight: 700, borderRadius: 1, fontSize: "1.1rem", flexShrink: 0,
+                            }}
+                          >
+                            {index + 1}
+                          </Box>
+                          {step.title && (
+                            <Typography variant="h6" component="h2" sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 600, color: colors.primary }}>
+                              {step.title}
+                            </Typography>
+                          )}
+                        </Stack>
+
+                        {step.contentHtml && (
+                          <Box
+                            sx={{
+                              fontSize: { xs: "0.95rem", sm: "1rem" }, color: colors.text, lineHeight: 1.6,
+                              mb: { xs: 2, sm: 3 }, wordBreak: "break-word",
+                              "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 }, "& li": { mb: 0.5 },
+                              "& strong, & b": { fontWeight: 700 }, "& em, & i": { fontStyle: "italic" },
+                              "& a": { color: colors.primary, textDecoration: "underline", "&:hover": { opacity: 0.8 } },
+                            }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(step.contentHtml) }}
+                          />
                         )}
-                      </Stack>
 
-                      {step.contentHtml && (
-                        <Box
-                          sx={{
-                            fontSize: { xs: "0.95rem", sm: "1rem" }, color: colors.text, lineHeight: 1.6,
-                            mb: { xs: 2, sm: 3 }, wordBreak: "break-word",
-                            "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 }, "& li": { mb: 0.5 },
-                            "& strong, & b": { fontWeight: 700 }, "& em, & i": { fontStyle: "italic" },
-                            "& a": { color: colors.primary, textDecoration: "underline", "&:hover": { opacity: 0.8 } },
-                          }}
-                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(step.contentHtml) }}
-                        />
-                      )}
-
-                      {embedUrl ? (
-                        isDirectVideo ? (
-                          <Box component="video" controls sx={{ width: "100%", borderRadius: 1 }}>
-                            <source src={step.videoUrl} />
-                          </Box>
-                        ) : (
-                          <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
-                            <Box
-                              component="iframe"
-                              src={embedUrl}
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                            />
-                          </Box>
-                        )
-                      ) : step.imageUrl ? (
-                        <Box
-                          onClick={() => { setEnlargedImage(step.imageUrl); setImgZoom(1); }}
-                          sx={{
-                            position: "relative", width: "100%", paddingBottom: "60%",
-                            overflow: "hidden", borderRadius: 1, bgcolor: "#f2f2f2",
-                            cursor: "pointer", transition: "all 0.2s ease",
-                            "&:hover": { boxShadow: colors.cardShadowHover },
-                          }}
-                        >
-                          <Image
+                        {embedUrl ? (
+                          isDirectVideo ? (
+                            <Box component="video" controls sx={{ width: "100%", borderRadius: 1 }}>
+                              <source src={step.videoUrl} />
+                            </Box>
+                          ) : (
+                            <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
+                              <Box
+                                component="iframe"
+                                src={embedUrl}
+                                title={step.title || "Step video"}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+                              />
+                            </Box>
+                          )
+                        ) : step.imageUrl ? (
+                          <StepImage
                             src={step.imageUrl}
                             alt={step.title}
-                            fill
-                            style={{ objectFit: "contain" }}
-                            sizes="(max-width: 600px) 100vw, (max-width: 960px) 90vw, 800px"
+                            onClick={() => { setEnlargedImage({ url: step.imageUrl!, alt: step.title || "Step image" }); setImgZoom(1); }}
                           />
-                        </Box>
-                      ) : null}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </Stack>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </Stack>
+            </Box>
           </Container>
         </Box>
 
@@ -971,26 +1167,63 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           onClose={() => { setEnlargedImage(null); setImgZoom(1); }}
           sx={{ display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "rgba(0,0,0,0.85)" }}
         >
-          <Box sx={{ outline: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-            <Box sx={{ overflow: "auto", maxWidth: "90vw", maxHeight: "80vh", borderRadius: "8px", bgcolor: "#111", lineHeight: 0 }}>
+          <Box
+            role="dialog"
+            aria-modal="true"
+            aria-label={enlargedImage ? `Enlarged image: ${enlargedImage.alt}` : "Enlarged image"}
+            sx={{ position: "relative", outline: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}
+          >
+            <IconButton
+              onClick={() => { setEnlargedImage(null); setImgZoom(1); }}
+              aria-label="Close image viewer"
+              sx={{
+                position: "absolute", top: 8, right: 8, zIndex: 1,
+                color: "white", width: 44, height: 44,
+                bgcolor: "rgba(0,0,0,0.6)",
+                "&:hover": { bgcolor: "rgba(0,0,0,0.8)" },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+            <Box
+              // A scrollable region must be keyboard operable: focusable with a
+              // name while zoomed, so the arrow keys pan the image
+              tabIndex={imgZoom > 1 ? 0 : undefined}
+              role={imgZoom > 1 ? "group" : undefined}
+              aria-label={imgZoom > 1 ? "Zoomed image. Use the arrow keys to pan." : undefined}
+              sx={{
+                overflow: "auto", maxWidth: "90vw", maxHeight: "80vh", borderRadius: "8px", bgcolor: "#111", lineHeight: 0,
+                "&:focus-visible": { outline: "3px solid #fff", outlineOffset: 2 },
+              }}
+            >
               {enlargedImage && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={enlargedImage}
-                  alt="Step image"
+                  src={enlargedImage.url}
+                  alt={enlargedImage.alt}
                   style={{ display: "block", width: `${imgZoom * 100}%`, height: "auto", cursor: imgZoom > 1 ? "zoom-out" : "zoom-in" }}
                   onClick={() => setImgZoom((z) => (z > 1 ? 1 : 1.5))}
                 />
               )}
             </Box>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ bgcolor: "rgba(0,0,0,0.6)", borderRadius: 2, px: 1.5, py: 0.5 }}>
-              <IconButton size="small" onClick={() => setImgZoom((z) => Math.max(1, z - 0.5))} disabled={imgZoom <= 1} sx={{ color: "white" }}>
+              <IconButton
+                onClick={() => setImgZoom((z) => Math.max(1, z - 0.5))}
+                disabled={imgZoom <= 1}
+                aria-label="Zoom out"
+                sx={{ color: "white", width: 44, height: 44, "&.Mui-disabled": { color: "rgba(255,255,255,0.4)" } }}
+              >
                 <RemoveIcon fontSize="small" />
               </IconButton>
               <Typography variant="caption" sx={{ color: "white", minWidth: 36, textAlign: "center" }}>
                 {Math.round(imgZoom * 100)}%
               </Typography>
-              <IconButton size="small" onClick={() => setImgZoom((z) => Math.min(1.5, z + 0.5))} disabled={imgZoom >= 1.5} sx={{ color: "white" }}>
+              <IconButton
+                onClick={() => setImgZoom((z) => Math.min(1.5, z + 0.5))}
+                disabled={imgZoom >= 1.5}
+                aria-label="Zoom in"
+                sx={{ color: "white", width: 44, height: 44, "&.Mui-disabled": { color: "rgba(255,255,255,0.4)" } }}
+              >
                 <AddIcon fontSize="small" />
               </IconButton>
             </Stack>
@@ -1000,7 +1233,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
         {showBackToTop && (
           <Fab
             size="small"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            onClick={scrollToTop}
+            aria-label="Back to top"
             sx={{
               position: "fixed", bottom: 72, right: 24, zIndex: 20,
               bgcolor: colors.primary, color: "#ffffff",
