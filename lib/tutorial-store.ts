@@ -34,6 +34,8 @@ export type Item = {
   name: string;
   description?: string;
   thumbnailUrl: string;
+  // Empty string means "decorative image"; undefined means never reviewed
+  thumbnailAlt?: string;
   slug: string;
   published: boolean;
   createdAt: Date;
@@ -53,6 +55,8 @@ export type Step = {
   title: string;
   contentHtml: string;
   imageUrl: string;
+  // Empty string means "decorative image"; undefined means never reviewed
+  imageAlt?: string;
   videoUrl?: string;
   order: number;
   createdAt: Date;
@@ -434,6 +438,8 @@ export async function updateItem(
       updates.thumbnailDataUrl,
       `${levelId}/${itemId}/thumbnail`,
     );
+    // A newly uploaded image invalidates the old description
+    if (updates.thumbnailDataUrl.startsWith("data:")) fields.thumbnailAlt = FieldValue.delete();
   }
 
   await itemsCol(levelId).doc(itemId).update(fields);
@@ -577,6 +583,8 @@ export async function updateStep(
       updates.imageDataUrl,
       `steps/${parentItemId}/${stepId}/image`,
     );
+    // A newly uploaded image invalidates the old description
+    if (updates.imageDataUrl.startsWith("data:")) fields.imageAlt = FieldValue.delete();
   }
 
   await stepsCol(parentItemId).doc(stepId).update(fields);
@@ -664,6 +672,43 @@ export async function setStepOrder(
     batch.update(stepsCol(parentItemId).doc(step.id), { order: i });
   });
   await batch.commit();
+
+  return getTutorialState();
+}
+
+// ============= ALT TEXT =============
+
+export type AltTextEntry =
+  | { kind: "item-thumbnail"; levelId: string; itemId: string; alt: string }
+  | { kind: "step-image"; parentItemId: string; stepId: string; alt: string };
+
+const BATCH_LIMIT = 400; // Firestore caps batches at 500 writes
+
+export async function applyAltText(
+  entries: AltTextEntry[],
+  modifiedBy?: string,
+): Promise<TutorialState> {
+  for (let i = 0; i < entries.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    for (const entry of entries.slice(i, i + BATCH_LIMIT)) {
+      const fields = {
+        lastModified: FieldValue.serverTimestamp(),
+        modifiedBy: modifiedBy ?? "system",
+      };
+      if (entry.kind === "item-thumbnail") {
+        batch.update(itemsCol(entry.levelId).doc(entry.itemId), {
+          ...fields,
+          thumbnailAlt: entry.alt,
+        });
+      } else {
+        batch.update(stepsCol(entry.parentItemId).doc(entry.stepId), {
+          ...fields,
+          imageAlt: entry.alt,
+        });
+      }
+    }
+    await batch.commit();
+  }
 
   return getTutorialState();
 }
