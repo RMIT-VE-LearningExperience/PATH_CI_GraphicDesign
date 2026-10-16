@@ -37,3 +37,11 @@ This app shares the `printer-app-531a8` Firebase project with other PATH apps. I
 - App Hosting framework detection requires `package.json` at the repository root.
 - Node version is set using `package.json` `engines.node` (`20.x`).
 - Build/start commands are configured in `apphosting.yaml` under `scripts`.
+
+## Image retention safety
+
+Automatic image deletion is disabled. The scheduled cleanup handler only logs;
+legacy orphan queues must not be used to delete images. Audits are read-only and
+use app-specific function names/codebases to prevent cross-app deployment collisions.
+Run `npm test --prefix functions` before deploying functions.
+The audit uses the app's named database and lists only its storage folder.
