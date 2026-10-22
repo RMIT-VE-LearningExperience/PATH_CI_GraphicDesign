@@ -367,7 +367,7 @@ function AccordionSection({ title, children }: { title: string; children: React.
   const baseId = useId();
   return (
     <Card sx={{ borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden", mb: 2 }}>
-      <Typography component="h3" sx={{ m: 0, fontSize: "inherit" }}>
+      <Typography component="h2" sx={{ m: 0, fontSize: "inherit" }}>
         <ButtonBase
           id={`${baseId}-header`}
           aria-expanded={open}
@@ -700,7 +700,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
         {group.subSteps.map((sub) => (
           <Box key={sub.id} sx={{ mt: 3, pl: 2, borderLeft: `3px solid ${colors.lightBorder}` }}>
             {sub.title && (
-              <Typography variant="h4" sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 700, color: colors.primary, mb: 1.5 }}>
+              <Typography component="h3" sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 700, color: colors.primary, mb: 1.5 }}>
                 {sub.title}
               </Typography>
             )}

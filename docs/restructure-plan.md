@@ -1,6 +1,6 @@
 # GraphicDesign restructure: plan and progress log
 
-Last updated: 2026-10-22. Status: phases 1 to 3 pushed to `Staging-GraphicDesign`. Phase 4 (tabs) and the numbered-list button are committed locally, not yet pushed. The "old-tab" API hardening commit is also still local.
+Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 to 4 are on `Staging-GraphicDesign`. The accordion heading fix and the old-Paper-data cleanup script are committed locally and not yet on Staging.
 
 ## Ground rules
 - Build on a branch based on `Staging-GraphicDesign`. Never push to `main`. Confirm before any push (see CLAUDE.md on Staging).
@@ -69,7 +69,12 @@ Last updated: 2026-10-22. Status: phases 1 to 3 pushed to `Staging-GraphicDesign
    - Checks: `tsc`, `next lint` and `next build` pass. The in-memory Firestore test covers sections, per-section ordering, the delete-then-add order collision, same-section parents and tab-name validation. A browser check with mock data covered tab labels, ARIA, URLs, keyboard use, accordions, the pop-up (once per session, reopen button) and the admin screens (the add-item payload goes to the printer for Overview). Not yet tried against the live database.
    - Fixed on the way: after a delete, adding a new step could get the same `order` as an existing one. Adding now renumbers the section.
 5. [x] Safety popup (once per browser session) plus the "!" icon. Built together with phase 4.
-6. [ ] Final checks: lint, build, accessibility check (axe), seed-content check.
+6. [x] Final checks.
+   - Lint, `tsc` and `next build`: pass.
+   - Seed: run against the staging database by the user (hierarchy now Printers > Products).
+   - Accessibility (axe-core 4.10, tags wcag2a, wcag2aa, wcag21a/aa, wcag22aa and best-practice) on 15 views: public overview (pop-up open, accordions collapsed and expanded), steps (sub-steps, gallery), image viewer, appendix, safety pop-up, admin Steps, Overview and Safety tabs, expanded step, add and edit step dialogs, tab-names dialog, and the alt-text page. 0 violations after one fix (accordion headings are now h2, with sub-items h3, so the heading order is valid).
+   - Mobile (375px): no horizontal scroll and no touch targets under 24px on the overview, steps and appendix tabs, and the pop-up.
+   - Not covered: a real screen-reader pass and testing against the live database.
 
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.
@@ -80,8 +85,12 @@ Last updated: 2026-10-22. Status: phases 1 to 3 pushed to `Staging-GraphicDesign
 - Visual Arts `main` has no tab component on its steps page.
 
 ## Open items
-- Next action: phase 5 and 6 items in the build order (the Safety pop-up is built as part of phase 4, so only the final checks remain).
+- **Remove the old Paper data (needs the user to run it).** The old Paper items live under `items/level_2`, which is now the **Products** level, so they can appear as Products until removed. Run the cleanup script with a cutoff date (see below).
 - Decided with the user: a product opens on **Printer Overview** the first time it is opened in a browser session (when it has an overview), and on Steps after that. A `?tab=` link always wins. Tracked per product in `sessionStorage`, like the safety pop-up.
-- Choices I made that you may want to change: accordions start collapsed; the "!" button sits inside the Printer Overview tab.
+- Choices awaiting confirmation: accordions start collapsed; the "!" button sits inside the Printer Overview tab.
 - Staging and main share one Firestore database (`path-ci-graphicdesign`). Content edits in staging also show on main. A separate staging database was discussed and not yet decided.
+- Backporting to the other PATH apps (especially PATH-Template) is parked for later.
 - Before any push: ask first (Staging only).
+
+### Removing the old Paper data
+`npm run remove-old-paper-data -- --before=YYYY-MM-DD` is a dry run that lists what would be deleted. Add `--apply` to delete. The cutoff date should be after the last Paper was created and before the first new Product was, so new Products are kept. The script deletes old Paper items under `level_2`, the printer-to-paper links and paper-to-product links, and soft-deleted Papers. It leaves Printers, steps, the old level_3 Products (now unreachable) and Storage files alone.
