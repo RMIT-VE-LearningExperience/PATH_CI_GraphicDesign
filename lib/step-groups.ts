@@ -3,6 +3,26 @@
 // imported as values from client components.
 import type { Step } from "./tutorial-store";
 
+// The parts of a product's Steps page. Overview content belongs to the printer
+// (the first-level item); the rest belong to the product (the last-level item).
+export type StepSection = "overview" | "steps" | "appendix" | "safety";
+
+export const STEP_SECTIONS: StepSection[] = ["overview", "steps", "appendix", "safety"];
+
+// Tab names are editable app-wide; these are the defaults
+export const DEFAULT_STEP_TAB_LABELS: Record<StepSection, string> = {
+  overview: "Printer Overview",
+  steps: "Steps",
+  appendix: "Appendix",
+  safety: "Quick Safety Reminders",
+};
+
+export const STEP_TAB_LABEL_MAX_LENGTH = 40;
+
+export function isStepSection(value: unknown): value is StepSection {
+  return typeof value === "string" && (STEP_SECTIONS as string[]).includes(value);
+}
+
 export type StepGroup = {
   main: Step;
   subSteps: Step[];

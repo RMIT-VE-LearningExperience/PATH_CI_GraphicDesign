@@ -55,6 +55,8 @@ type Props = {
   mode: "add" | "edit";
   // Display number, e.g. "3" for a main step or "3.2" for a sub-step
   stepLabel?: string;
+  // For tabs other than Steps: the tab's name, used in place of a number in the title
+  sectionName?: string;
   // The step being edited (it can't be its own parent)
   stepId?: string;
   stepType: "main" | "sub";
@@ -75,6 +77,7 @@ export default function AddEditStepDialog({
   loading,
   mode,
   stepLabel,
+  sectionName,
   stepId,
   stepType: initialStepType,
   parentStepId: initialParentStepId,
@@ -159,15 +162,19 @@ export default function AddEditStepDialog({
   return (
     <>
       <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: DIALOG_PAPER_SX }}>
-        <DialogTitle sx={DIALOG_TITLE_SX}>{stepType === "sub" ? "Sub-step" : "Step"} {stepLabel ?? "1"}</DialogTitle>
+        <DialogTitle sx={DIALOG_TITLE_SX}>
+          {sectionName
+            ? `${sectionName}: ${mode === "add" ? "new" : "edit"} ${stepType === "sub" ? "sub-item" : "item"}`
+            : `${stepType === "sub" ? "Sub-step" : "Step"} ${stepLabel ?? "1"}`}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 2 }}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <FormControl size="small" sx={{ minWidth: 160 }} disabled={parentOptions.length === 0 && stepType === "main"}>
-                <InputLabel id="step-type-label">Step type</InputLabel>
+                <InputLabel id="step-type-label">{sectionName ? "Item type" : "Step type"}</InputLabel>
                 <Select
                   labelId="step-type-label"
-                  label="Step type"
+                  label={sectionName ? "Item type" : "Step type"}
                   value={stepType}
                   onChange={(e) => {
                     const next = e.target.value as "main" | "sub";
@@ -177,17 +184,17 @@ export default function AddEditStepDialog({
                     }
                   }}
                 >
-                  <MenuItem value="main">Main step</MenuItem>
-                  <MenuItem value="sub" disabled={parentOptions.length === 0}>Sub-step</MenuItem>
+                  <MenuItem value="main">{sectionName ? "Main item" : "Main step"}</MenuItem>
+                  <MenuItem value="sub" disabled={parentOptions.length === 0}>{sectionName ? "Sub-item" : "Sub-step"}</MenuItem>
                 </Select>
               </FormControl>
 
               {stepType === "sub" && (
                 <FormControl size="small" sx={{ minWidth: 200, flex: 1 }} required>
-                  <InputLabel id="parent-step-label">Under main step</InputLabel>
+                  <InputLabel id="parent-step-label">{sectionName ? "Under main item" : "Under main step"}</InputLabel>
                   <Select
                     labelId="parent-step-label"
-                    label="Under main step"
+                    label={sectionName ? "Under main item" : "Under main step"}
                     value={parentStepId ?? ""}
                     onChange={(e) => setParentStepId(e.target.value || null)}
                   >
@@ -370,7 +377,7 @@ export default function AddEditStepDialog({
           >
             {loading
               ? (mode === "add" ? "Adding..." : "Saving...")
-              : (mode === "add" ? (stepType === "sub" ? "Add Sub-step" : "Add Step") : "Save")}
+              : (mode === "add" ? (sectionName ? (stepType === "sub" ? "Add Sub-item" : "Add Item") : (stepType === "sub" ? "Add Sub-step" : "Add Step")) : "Save")}
           </Button>
         </DialogActions>
       </Dialog>

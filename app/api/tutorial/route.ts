@@ -1,3 +1,4 @@
+import type { StepSection } from "../../../lib/step-groups";
 import { NextRequest, NextResponse } from "next/server";
 import { auth, adminDb } from "../../../lib/firebase-admin";
 
@@ -36,7 +37,7 @@ type ActionPayload =
   | { action: "linkItem"; parentLevelId: string; parentItemId: string; childLevelId: string; childItemId: string }
   | { action: "unlinkItem"; parentLevelId: string; parentItemId: string; childItemId: string }
   | { action: "updateRelationship"; parentLevelId: string; parentItemId: string; childItemId: string; published: boolean }
-  | { action: "addStep"; parentItemId: string; title: string; contentHtml: string; imageDataUrls: string[]; videoUrl?: string; stepType: "main" | "sub"; parentStepId: string | null }
+  | { action: "addStep"; parentItemId: string; title: string; contentHtml: string; imageDataUrls: string[]; videoUrl?: string; stepType: "main" | "sub"; parentStepId: string | null; section?: StepSection }
   | { action: "updateStep"; parentItemId: string; stepId: string; title?: string; contentHtml?: string; imageDataUrls?: string[]; videoUrl?: string; stepType?: "main" | "sub"; parentStepId?: string | null }
   | { action: "deleteStep"; parentItemId: string; stepId: string }
   | { action: "reorderStep"; parentItemId: string; stepId: string; direction: "up" | "down" }
@@ -89,7 +90,7 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
       return updateRelationship(payload.parentLevelId, payload.parentItemId, payload.childItemId, payload.published);
 
     case "addStep":
-      return addStep(payload.parentItemId, payload.title, payload.contentHtml, legacyImages(payload) ?? [], payload.videoUrl, payload.stepType, payload.parentStepId, modifiedBy);
+      return addStep(payload.parentItemId, payload.title, payload.contentHtml, legacyImages(payload) ?? [], payload.videoUrl, payload.stepType, payload.parentStepId, payload.section ?? "steps", modifiedBy);
 
     case "updateStep":
       return updateStep(

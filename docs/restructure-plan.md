@@ -1,6 +1,6 @@
 # GraphicDesign restructure: plan and progress log
 
-Last updated: 2026-10-22. Status: phases 1 to 3 done and pushed to `Staging-GraphicDesign`. Next: phase 4 (tabs).
+Last updated: 2026-10-22. Status: phases 1 to 3 pushed to `Staging-GraphicDesign`. Phase 4 (tabs) and the numbered-list button are committed locally, not yet pushed. The "old-tab" API hardening commit is also still local.
 
 ## Ground rules
 - Build on a branch based on `Staging-GraphicDesign`. Never push to `main`. Confirm before any push (see CLAUDE.md on Staging).
@@ -59,8 +59,16 @@ Last updated: 2026-10-22. Status: phases 1 to 3 done and pushed to `Staging-Grap
    - Sub-steps are tied to the step list, so they will work in every tab once tabs exist (phase 4).
    - Bug fixed while testing: public step images had collapsed to zero height, because `p: 0` came after `paddingBottom` in `StepImage`. This bug predates phase 2.
    - Checks: `tsc`, `next lint` and `next build` pass. A browser check with mock data confirmed the labels, headings, counter, image gallery and viewer. An in-memory Firestore test covered add, reorder, convert, cascade delete, alt-text apply and old-document upgrade, and all passed. Not yet tried against the live database.
-4. [ ] Tabs: `section` field, app-wide editable labels, admin tab editor, public tabs with links, empty-tab hiding.
-5. [ ] Safety popup (once per browser session) plus the "!" icon.
+4. [x] Tabs. Details:
+   - Data: each step has a `section` ("overview", "steps", "appendix", "safety"; older steps default to "steps"). Overview steps are stored against the **printer** (first-level item). The rest are stored against the **product**. Ordering is per section, and sub-steps must sit in the same section as their parent.
+   - Tab names: stored in `settings/appSettings.stepTabs`, shared by the whole app. Defaults are Printer Overview, Steps, Appendix and Quick Safety Reminders. Admins edit them with "Edit tab names" on the product's steps screen. Blank names are dropped and names are capped at 40 characters.
+   - Admin: the product's steps screen has four tabs. Each tab keeps its own list, with drag reorder and sub-items. Only the Steps tab is numbered.
+   - Public: a tab bar (Printer Overview, Steps, Appendix), each tab shown only if it has content. It follows the WAI-ARIA tab pattern, with arrow, Home and End keys. Each tab has a link (`?tab=appendix`). The product opens on Steps by default. Overview and Appendix show as accordions, with sub-items nested inside the parent's panel and no numbers. The step counter only shows on the Steps tab.
+   - Quick Safety Reminders: a pop-up, per product, opened once per browser session (`sessionStorage`). A red "!" button in the Printer Overview tab reopens it. If the product has no overview tab, the "!" shows above the content instead.
+   - Alt-text tool: covers all four sections, with the tab name in each row's location.
+   - Checks: `tsc`, `next lint` and `next build` pass. The in-memory Firestore test covers sections, per-section ordering, the delete-then-add order collision, same-section parents and tab-name validation. A browser check with mock data covered tab labels, ARIA, URLs, keyboard use, accordions, the pop-up (once per session, reopen button) and the admin screens (the add-item payload goes to the printer for Overview). Not yet tried against the live database.
+   - Fixed on the way: after a delete, adding a new step could get the same `order` as an existing one. Adding now renumbers the section.
+5. [x] Safety popup (once per browser session) plus the "!" icon. Built together with phase 4.
 6. [ ] Final checks: lint, build, accessibility check (axe), seed-content check.
 
 ## Findings from the review (for context)
@@ -72,7 +80,7 @@ Last updated: 2026-10-22. Status: phases 1 to 3 done and pushed to `Staging-Grap
 - Visual Arts `main` has no tab component on its steps page.
 
 ## Open items
-- None blocking. Next action: phase 4 (tabs: `section` field, app-wide tab labels, Overview, Steps, Appendix and the Safety popup).
-- For phase 4: sub-steps already work on any step list, so each tab's list can reuse `groupSteps`. Overview and Appendix show sub-steps inside the parent's accordion panel, with no numbers.
+- Next action: phase 5 and 6 items in the build order (the Safety pop-up is built as part of phase 4, so only the final checks remain).
+- Choices I made that you may want to change: the default tab is Steps (not Printer Overview); accordions start collapsed; the "!" button sits inside the Printer Overview tab.
 - Staging and main share one Firestore database (`path-ci-graphicdesign`). Content edits in staging also show on main. A separate staging database was discussed and not yet decided.
 - Before any push: ask first (Staging only).

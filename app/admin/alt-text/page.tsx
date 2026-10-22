@@ -30,7 +30,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-provider";
 import { getAuthInstance } from "../../../lib/firebase-client";
 import type { AltTextEntry, TutorialState } from "../../../lib/tutorial-store";
-import { stepLabels } from "../../../lib/step-groups";
+import { STEP_SECTIONS, stepLabels } from "../../../lib/step-groups";
 import type { AltTextProposal, SkippedImage } from "../../../lib/alt-text-review";
 
 const TEAL = "#000054";
@@ -56,7 +56,6 @@ function buildRows(state: TutorialState): Row[] {
   const levels = state.hierarchy.levels
     .filter((l) => l.enabled)
     .sort((a, b) => a.order - b.order);
-  const lastLevel = levels[levels.length - 1];
 
   for (const level of levels) {
     for (const item of state.items[level.id] ?? []) {
@@ -75,15 +74,23 @@ function buildRows(state: TutorialState): Row[] {
     }
   }
 
-  if (lastLevel) {
-    const lastLevelItems = new Map(
-      (state.items[lastLevel.id] ?? []).map((item) => [item.id, item]),
-    );
-    for (const [parentItemId, steps] of Object.entries(state.steps)) {
-      const parent = lastLevelItems.get(parentItemId);
-      const labels = stepLabels(steps);
+  const itemNames = new Map<string, string>();
+  for (const level of levels) {
+    for (const item of state.items[level.id] ?? []) itemNames.set(item.id, item.name);
+  }
+  const tabLabels = state.appSettings.stepTabs;
+
+  for (const [parentItemId, allSteps] of Object.entries(state.steps)) {
+    for (const section of STEP_SECTIONS) {
+      const steps = allSteps.filter((step) => step.section === section);
+      // Only the Steps tab is numbered; the other tabs list plain titled entries
+      const labels = section === "steps" ? stepLabels(steps) : new Map<string, string>();
+      const sectionPrefix = section === "steps" ? "" : `${tabLabels[section]} → `;
+
       steps.forEach((step) => {
-        const label = labels.get(step.id) ?? "";
+        const label = labels.get(step.id);
+        const noun = section === "steps" ? (step.stepType === "sub" ? "Sub-step" : "Step") : (step.stepType === "sub" ? "Sub-item" : "Item");
+        const heading = label ? `${noun} ${label}: ${step.title}` : `${noun}: ${step.title}`;
         step.imageUrls.forEach((imageUrl, imageIndex) => {
           const currentAlt = step.imageAlts[imageIndex] ?? undefined;
           const imageLabel = step.imageUrls.length > 1 ? ` (image ${imageIndex + 1} of ${step.imageUrls.length})` : "";
@@ -92,7 +99,7 @@ function buildRows(state: TutorialState): Row[] {
             kind: "step-image",
             parentItemId,
             stepId: step.id,
-            location: `${parent?.name ?? parentItemId} → ${step.stepType === "sub" ? "Sub-step" : "Step"} ${label}: ${step.title}${imageLabel}`,
+            location: `${itemNames.get(parentItemId) ?? parentItemId} → ${sectionPrefix}${heading}${imageLabel}`,
             imageUrl,
             currentAlt,
             draftAlt: currentAlt ?? "",

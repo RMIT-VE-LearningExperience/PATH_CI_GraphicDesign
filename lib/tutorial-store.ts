@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 
 import { db, adminDb } from "./firebase-admin";
+import { DEFAULT_STEP_TAB_LABELS, STEP_TAB_LABEL_MAX_LENGTH, isStepSection, type StepSection } from "./step-groups";
 import { resolveImageUrl } from "./media-storage";
 
 // ============= TYPES =============
@@ -29,6 +30,8 @@ export type AppSettings = {
     canvasEmbed: boolean;
     fullItemListView: boolean;
   };
+  // Names of the tabs on the Steps page, shared by the whole app
+  stepTabs: Record<StepSection, string>;
 };
 
 export type Item = {
@@ -61,6 +64,8 @@ export type Step = {
   imageUrls: string[];
   imageAlts: (string | null)[];
   videoUrl?: string;
+  // Which tab of the Steps page the step belongs to. Older steps are all "steps".
+  section: StepSection;
   // A sub-step belongs to a main step and is shown nested under it. Only one
   // level of nesting is allowed, and a main step's sub-steps follow it in `order`.
   stepType: "main" | "sub";
@@ -117,6 +122,7 @@ function defaultAppSettings(): AppSettings {
       canvasEmbed: true,
       fullItemListView: true,
     },
+    stepTabs: { ...DEFAULT_STEP_TAB_LABELS },
   };
 }
 
@@ -161,10 +167,11 @@ function toStep(id: string, data: Record<string, unknown>): Step {
   void _legacyUrl;
   void _legacyAlt;
   return {
-    ...(rest as Omit<Step, "id" | "imageUrls" | "imageAlts" | "stepType" | "parentStepId" | "createdAt" | "lastModified">),
+    ...(rest as Omit<Step, "id" | "imageUrls" | "imageAlts" | "section" | "stepType" | "parentStepId" | "createdAt" | "lastModified">),
     id,
     imageUrls: urls,
     imageAlts: urls.map((_, i) => storedAlts[i] ?? null),
+    section: isStepSection(data.section) ? data.section : "steps",
     // Steps saved before sub-steps existed are all main steps
     stepType: data.stepType === "sub" ? "sub" : "main",
     parentStepId: typeof data.parentStepId === "string" ? data.parentStepId : null,
@@ -269,9 +276,13 @@ export async function getTutorialState(publishedOnly = false): Promise<TutorialS
   const hierarchyData = hierarchySnap.data() as { levels: Level[] };
   const hierarchy: HierarchyConfig = { levels: hierarchyData.levels ?? [] };
 
-  const appSettings: AppSettings = appSettingsSnap.exists
-    ? (appSettingsSnap.data() as AppSettings)
-    : defaultAppSettings();
+  // Fill in anything missing from older saved settings (e.g. tab names)
+  const defaults = defaultAppSettings();
+  const saved = (appSettingsSnap.exists ? appSettingsSnap.data() : {}) as Partial<AppSettings>;
+  const appSettings: AppSettings = {
+    features: { ...defaults.features, ...saved.features },
+    stepTabs: { ...defaults.stepTabs, ...saved.stepTabs },
+  };
 
   const homepageData = homepageSnap.data();
   const homepageTitle = (homepageData?.title as string) ?? "";
@@ -359,16 +370,21 @@ export async function getTutorialState(publishedOnly = false): Promise<TutorialS
     }
   }
 
-  // Load steps for items at the last active level
+  // Load steps for the last-level items (steps, appendix, safety) and the
+  // first-level items (the overview shown on every product beneath them).
+  // With a single level these are the same items.
   const steps: Record<string, Step[]> = {};
 
   if (activeLevels.length > 0) {
-    const lastLevel = activeLevels[activeLevels.length - 1];
+    const stepOwners = new Map<string, Item>();
+    for (const level of [activeLevels[0], activeLevels[activeLevels.length - 1]]) {
+      for (const item of items[level.id] ?? []) stepOwners.set(item.id, item);
+    }
 
     await Promise.all(
-      (items[lastLevel.id] ?? []).map(async (item) => {
-        const snap = await stepsCol(item.id).get();
-        steps[item.id] = snap.docs
+      Array.from(stepOwners.keys()).map(async (itemId) => {
+        const snap = await stepsCol(itemId).get();
+        steps[itemId] = snap.docs
           .map((doc) => toStep(doc.id, doc.data()))
           .sort((a, b) => a.order - b.order);
       }),
@@ -581,17 +597,21 @@ async function resolveStepImages(
   return urls.filter(Boolean);
 }
 
-type StepMeta = { id: string; order: number; stepType: "main" | "sub"; parentStepId: string | null };
+type StepMeta = { id: string; order: number; section: StepSection; stepType: "main" | "sub"; parentStepId: string | null };
 
-async function fetchStepMetas(parentItemId: string): Promise<StepMeta[]> {
+// Steps are ordered within their section, so every ordering operation works on
+// one section's list at a time.
+async function fetchStepMetas(parentItemId: string, section?: StepSection): Promise<StepMeta[]> {
   const snap = await stepsCol(parentItemId).get();
   return snap.docs
     .map((doc) => ({
       id: doc.id,
       order: (doc.data().order as number) ?? 0,
+      section: (isStepSection(doc.data().section) ? doc.data().section : "steps") as StepSection,
       stepType: (doc.data().stepType === "sub" ? "sub" : "main") as "main" | "sub",
       parentStepId: (doc.data().parentStepId as string | null) ?? null,
     }))
+    .filter((meta) => !section || meta.section === section)
     .sort((a, b) => a.order - b.order);
 }
 
@@ -613,12 +633,14 @@ export async function addStep(
   videoUrl: string | undefined,
   stepType: "main" | "sub",
   parentStepId: string | null,
+  section: StepSection,
   modifiedBy?: string,
 ): Promise<TutorialState> {
-  const existing = await fetchStepMetas(parentItemId);
+  if (!isStepSection(section)) throw new Error("Unknown section.");
+  const existing = await fetchStepMetas(parentItemId, section);
   const parent = parentStepId ? existing.find((s) => s.id === parentStepId) : undefined;
   if (stepType === "sub" && (!parent || parent.stepType !== "main")) {
-    throw new Error("Sub-step parent must be an existing main step.");
+    throw new Error("Sub-step parent must be an existing main step in the same section.");
   }
   const isSub = stepType === "sub";
   // A sub-step goes at the end of its parent's block; a main step goes at the very end
@@ -627,9 +649,12 @@ export async function addStep(
   const ref = stepsCol(parentItemId).doc();
   const imageUrls = await resolveStepImages(parentItemId, ref.id, imageDataUrls);
 
+  // Renumber the whole section so `order` is always 0..n-1 (deleting a step
+  // leaves a gap that would otherwise collide with the new step's position)
   const batch = db.batch();
-  existing.slice(insertAt).forEach((step, i) => {
-    batch.update(stepsCol(parentItemId).doc(step.id), { order: insertAt + i + 1 });
+  existing.forEach((step, i) => {
+    const order = i < insertAt ? i : i + 1;
+    if (order !== step.order) batch.update(stepsCol(parentItemId).doc(step.id), { order });
   });
   batch.set(ref, {
     title,
@@ -637,6 +662,7 @@ export async function addStep(
     imageUrls,
     imageAlts: imageUrls.map(() => null),
     videoUrl: videoUrl ?? "",
+    section,
     stepType: isSub ? "sub" : "main",
     parentStepId: isSub ? parentStepId : null,
     order: insertAt,
@@ -683,9 +709,12 @@ export async function updateStep(
     fields.imageAlt = FieldValue.delete();
   }
 
-  const existing = await fetchStepMetas(parentItemId);
+  const everyStep = await fetchStepMetas(parentItemId);
+  const currentStep = everyStep.find((s) => s.id === stepId);
+  if (!currentStep) return getTutorialState();
+  // A step stays in its own section; only that section's list is reordered
+  const existing = everyStep.filter((s) => s.section === currentStep.section);
   const currentIdx = existing.findIndex((s) => s.id === stepId);
-  if (currentIdx < 0) return getTutorialState();
   const current = existing[currentIdx];
 
   const nextStepType = updates.stepType ?? current.stepType;
@@ -812,7 +841,9 @@ export async function reorderMainStep(
   stepId: string,
   newBlockIndex: number,
 ): Promise<TutorialState> {
-  const steps = await fetchStepMetas(parentItemId);
+  const everyStep = await fetchStepMetas(parentItemId);
+  const section = everyStep.find((s) => s.id === stepId)?.section;
+  const steps = everyStep.filter((s) => s.section === section);
 
   const blocks: StepMeta[][] = [];
   const blockIndexByMainId = new Map<string, number>();
@@ -853,9 +884,10 @@ export async function reorderSubStep(
   newParentStepId: string,
   newIndexWithinParent: number,
 ): Promise<TutorialState> {
-  const steps = await fetchStepMetas(parentItemId);
-
-  const moved = steps.find((s) => s.id === stepId);
+  const everyStep = await fetchStepMetas(parentItemId);
+  const moved = everyStep.find((s) => s.id === stepId);
+  // A sub-step can only move within its own section
+  const steps = everyStep.filter((s) => s.section === moved?.section);
   const newParent = steps.find((s) => s.id === newParentStepId);
   if (!moved || !newParent || newParent.stepType !== "main") return getTutorialState();
 
@@ -984,7 +1016,17 @@ export async function updateLevelSettings(
 }
 
 export async function updateAppSettings(settings: Partial<AppSettings>): Promise<void> {
-  await db.collection("settings").doc("appSettings").set(settings, { merge: true });
+  const clean: Partial<AppSettings> = { ...settings };
+  if (settings.stepTabs) {
+    // Keep only known tabs with a usable name; a blank name would leave an unlabelled tab
+    const stepTabs: Partial<Record<StepSection, string>> = {};
+    for (const [section, label] of Object.entries(settings.stepTabs)) {
+      const trimmed = typeof label === "string" ? label.trim() : "";
+      if (isStepSection(section) && trimmed) stepTabs[section] = trimmed.slice(0, STEP_TAB_LABEL_MAX_LENGTH);
+    }
+    clean.stepTabs = stepTabs as AppSettings["stepTabs"];
+  }
+  await db.collection("settings").doc("appSettings").set(clean, { merge: true });
 }
 
 // Used by GET /api/tutorial to allow admins to see unpublished content

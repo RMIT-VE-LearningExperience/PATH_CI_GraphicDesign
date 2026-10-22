@@ -1,5 +1,5 @@
-import { stepLabels } from "./step-groups";
-import { getTutorialState, type Level, type TutorialState } from "./tutorial-store";
+import { STEP_SECTIONS, stepLabels } from "./step-groups";
+import { getTutorialState, type TutorialState } from "./tutorial-store";
 import { fetchImageAsDataUrl, getValModel, valChatCompletion, type ValMessage } from "./val-client";
 
 // ============= TYPES =============
@@ -106,8 +106,6 @@ function collectTargets(state: TutorialState, filters: AltTextReviewFilters): Re
   const levels = state.hierarchy.levels
     .filter((l) => l.enabled)
     .sort((a, b) => a.order - b.order);
-  const levelById = new Map<string, Level>(levels.map((l) => [l.id, l]));
-  const lastLevel = levels[levels.length - 1];
 
   // Item thumbnails (skipped when reviewing a single item's steps)
   if (!filters.parentItemId) {
@@ -134,38 +132,50 @@ function collectTargets(state: TutorialState, filters: AltTextReviewFilters): Re
     }
   }
 
-  // Step images belong to items at the last level
-  if (!filters.levelId && lastLevel) {
-    const lastLevelItems = new Map(
-      (state.items[lastLevel.id] ?? []).map((item) => [item.id, item]),
-    );
-    for (const [parentItemId, steps] of Object.entries(state.steps)) {
-      if (filters.parentItemId && parentItemId !== filters.parentItemId) continue;
-      const parent = lastLevelItems.get(parentItemId);
-      const parentLabel = parent
-        ? `${levelById.get(lastLevel.id)?.singularName ?? "Item"} "${parent.name}"`
-        : "an unknown item";
+  // Step images belong to the printer (overview) or the product (everything else)
+  if (!filters.levelId) {
+    const itemById = new Map<string, { name: string; levelName: string }>();
+    for (const level of levels) {
+      for (const item of state.items[level.id] ?? []) itemById.set(item.id, { name: item.name, levelName: level.singularName });
+    }
+    const tabLabels = state.appSettings.stepTabs;
 
-      const labels = stepLabels(steps);
-      steps.forEach((step) => {
-        const label = labels.get(step.id) ?? "";
-        step.imageUrls.forEach((imageUrl, imageIndex) => {
-          const imageLabel = step.imageUrls.length > 1 ? ` (image ${imageIndex + 1} of ${step.imageUrls.length})` : "";
-          targets.push({
-            key: `step:${parentItemId}:${step.id}:${imageIndex}`,
-            kind: "step-image",
-            parentItemId,
-            stepId: step.id,
-            name: step.title,
-            location: `${parent?.name ?? parentItemId} → ${step.stepType === "sub" ? "Sub-step" : "Step"} ${label}: ${step.title}${imageLabel}`,
-            imageUrl,
-            context: [
-              `This image illustrates ${step.stepType === "sub" ? "sub-step" : "step"} ${label}, titled "${step.title}", in the guide for ${parentLabel}.${step.imageUrls.length > 1 ? ` The step has ${step.imageUrls.length} images; this is image ${imageIndex + 1}.` : ""}`,
-              `Step text: ${truncate(stripHtml(step.contentHtml), 500)}`,
-            ].join("\n"),
+    for (const [parentItemId, allSteps] of Object.entries(state.steps)) {
+      if (filters.parentItemId && parentItemId !== filters.parentItemId) continue;
+      const parent = itemById.get(parentItemId);
+      const parentLabel = parent ? `${parent.levelName} "${parent.name}"` : "an unknown item";
+
+      for (const section of STEP_SECTIONS) {
+        const steps = allSteps.filter((step) => step.section === section);
+        // Only the Steps tab is numbered; the other tabs list plain titled entries
+        const labels = section === "steps" ? stepLabels(steps) : new Map<string, string>();
+        const sectionPrefix = section === "steps" ? "" : `${tabLabels[section]} → `;
+
+        steps.forEach((step) => {
+          const label = labels.get(step.id);
+          const noun = section === "steps" ? (step.stepType === "sub" ? "Sub-step" : "Step") : (step.stepType === "sub" ? "Sub-item" : "Item");
+          const heading = label ? `${noun} ${label}: ${step.title}` : `${noun}: ${step.title}`;
+          step.imageUrls.forEach((imageUrl, imageIndex) => {
+            const imageLabel = step.imageUrls.length > 1 ? ` (image ${imageIndex + 1} of ${step.imageUrls.length})` : "";
+            targets.push({
+              key: `step:${parentItemId}:${step.id}:${imageIndex}`,
+              kind: "step-image",
+              parentItemId,
+              stepId: step.id,
+              name: step.title,
+              location: `${parent?.name ?? parentItemId} → ${sectionPrefix}${heading}${imageLabel}`,
+              imageUrl,
+              context: [
+                section === "steps"
+                  ? `This image illustrates ${noun.toLowerCase()} ${label}, titled "${step.title}", in the guide for ${parentLabel}.`
+                  : `This image is in the "${tabLabels[section]}" section, in an entry titled "${step.title}", for ${parentLabel}.`,
+                step.imageUrls.length > 1 ? `The entry has ${step.imageUrls.length} images; this is image ${imageIndex + 1}.` : "",
+                `Text: ${truncate(stripHtml(step.contentHtml), 500)}`,
+              ].filter(Boolean).join("\n"),
+            });
           });
         });
-      });
+      }
     }
   }
 

@@ -5,15 +5,24 @@ import { useRouter } from "next/navigation";
 import {
   Alert,
   Box,
+  Button,
+  ButtonBase,
   Card,
   CardContent,
   CircularProgress,
+  Collapse,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Fab,
   Grid,
   IconButton,
   Modal,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -23,6 +32,8 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
+  ErrorOutline as ErrorOutlineIcon,
+  ExpandMore as ExpandMoreIcon,
   Home as HomeIcon,
   Image as ImageIcon,
   Info as InfoIcon,
@@ -33,7 +44,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { trackEvent } from "./GoogleAnalytics";
 import Footer from "./Footer";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
-import { groupSteps } from "../../lib/step-groups";
+import { DEFAULT_STEP_TAB_LABELS, groupSteps, isStepSection, type StepGroup, type StepSection } from "../../lib/step-groups";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -346,6 +357,42 @@ function StepImage({ src, alt, onClick }: { src: string; alt: string; onClick: (
   );
 }
 
+// ── Accordion ─────────────────────────────────────────────────────────
+// A heading whose button expands a region (the WAI-ARIA accordion pattern).
+// MUI's own Accordion nests the heading inside the button, which drops its
+// heading role, so this is built directly.
+
+function AccordionSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const baseId = useId();
+  return (
+    <Card sx={{ borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden", mb: 2 }}>
+      <Typography component="h3" sx={{ m: 0, fontSize: "inherit" }}>
+        <ButtonBase
+          id={`${baseId}-header`}
+          aria-expanded={open}
+          aria-controls={`${baseId}-panel`}
+          onClick={() => setOpen((o) => !o)}
+          sx={{
+            width: "100%", minHeight: 56, px: { xs: 2.5, sm: 3.5 }, py: 1.5,
+            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, textAlign: "left",
+            fontFamily: "inherit", fontSize: { xs: "1.05rem", sm: "1.2rem" }, fontWeight: 700, color: colors.primary,
+            "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: -3 },
+          }}
+        >
+          <span>{title}</span>
+          <ExpandMoreIcon aria-hidden="true" sx={{ transition: "transform 0.2s ease", transform: open ? "rotate(180deg)" : "none", "@media (prefers-reduced-motion: reduce)": { transition: "none" } }} />
+        </ButtonBase>
+      </Typography>
+      <Collapse in={open} timeout="auto" unmountOnExit={false}>
+        <Box id={`${baseId}-panel`} role="region" aria-labelledby={`${baseId}-header`} sx={{ px: { xs: 2.5, sm: 3.5 }, pb: { xs: 2.5, sm: 3.5 } }}>
+          {children}
+        </Box>
+      </Collapse>
+    </Card>
+  );
+}
+
 // ── Path helpers ──────────────────────────────────────────────────────
 
 type NavEntry = { levelId: string; itemId: string };
@@ -437,7 +484,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
   const currentSteps = useMemo((): Step[] => {
     if (!state || !atSteps || !parentEntry) return [];
-    return state.steps[parentEntry.itemId] ?? [];
+    return (state.steps[parentEntry.itemId] ?? []).filter((step) => step.section === "steps");
   }, [state, atSteps, parentEntry]);
 
   // Main steps with their sub-steps, flattened back into reading order. Each
@@ -454,6 +501,191 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     });
     return { entries, totalMainSteps: groups.length };
   }, [currentSteps]);
+
+  // ── Tabs on the Steps page ──────────────────────────────────────────
+  // Printer Overview (written once per printer), Steps, and Appendix are tabs.
+  // Quick Safety Reminders is a pop-up. A tab with nothing in it is hidden.
+
+  const tabLabels = state?.appSettings?.stepTabs ?? DEFAULT_STEP_TAB_LABELS;
+  const productId = parentEntry?.itemId ?? "";
+  const printerId = selectionStack[0]?.itemId ?? "";
+
+  const sectionGroups = useMemo(() => {
+    const pick = (ownerId: string, section: StepSection): StepGroup[] =>
+      groupSteps((state?.steps[ownerId] ?? []).filter((step) => step.section === section));
+    if (!state || !atSteps || !productId) return { overview: [], appendix: [], safety: [] } as Record<"overview" | "appendix" | "safety", StepGroup[]>;
+    return { overview: pick(printerId, "overview"), appendix: pick(productId, "appendix"), safety: pick(productId, "safety") };
+  }, [state, atSteps, productId, printerId]);
+
+  const visibleTabs = useMemo((): StepSection[] => {
+    const tabs: StepSection[] = [];
+    if (sectionGroups.overview.length > 0) tabs.push("overview");
+    if (stepEntries.entries.length > 0) tabs.push("steps");
+    if (sectionGroups.appendix.length > 0) tabs.push("appendix");
+    return tabs;
+  }, [sectionGroups, stepEntries]);
+
+  // The tab a visitor picked (or arrived on through ?tab=), tied to the product
+  // it was chosen for so moving to another product starts on Steps again
+  const [tabChoice, setTabChoice] = useState<{ itemId: string; tab: StepSection } | null>(null);
+  const urlTabRef = useRef<StepSection | null>(null);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (isStepSection(requested)) urlTabRef.current = requested;
+  }, []);
+  useEffect(() => {
+    if (atSteps && productId && urlTabRef.current) {
+      setTabChoice({ itemId: productId, tab: urlTabRef.current });
+      urlTabRef.current = null;
+    }
+  }, [atSteps, productId]);
+
+  const activeTab: StepSection =
+    tabChoice && tabChoice.itemId === productId && visibleTabs.includes(tabChoice.tab)
+      ? tabChoice.tab
+      : visibleTabs.includes("steps") ? "steps" : (visibleTabs[0] ?? "steps");
+
+  function selectTab(tab: StepSection) {
+    setTabChoice({ itemId: productId, tab });
+    // Keep the address linkable to this tab without adding history entries
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    trackEvent("view_tab", { tab });
+  }
+
+  function handleTabKeyDown(e: React.KeyboardEvent) {
+    const index = visibleTabs.indexOf(activeTab);
+    let next = -1;
+    if (e.key === "ArrowRight") next = (index + 1) % visibleTabs.length;
+    else if (e.key === "ArrowLeft") next = (index - 1 + visibleTabs.length) % visibleTabs.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = visibleTabs.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    selectTab(visibleTabs[next]);
+    document.getElementById(`step-tab-${visibleTabs[next]}`)?.focus();
+  }
+
+  // Quick Safety Reminders: shown once per browser session for each product
+  const [safetyOpen, setSafetyOpen] = useState(false);
+  const safetySeenRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!atSteps || !productId || sectionGroups.safety.length === 0) return;
+    const key = `path_safety_seen_${productId}`;
+    let seen = safetySeenRef.current.has(key);
+    try { seen = seen || window.sessionStorage.getItem(key) === "1"; } catch { /* storage unavailable: fall back to the in-memory record */ }
+    if (seen) return;
+    safetySeenRef.current.add(key);
+    try { window.sessionStorage.setItem(key, "1"); } catch { /* ignore */ }
+    setSafetyOpen(true);
+  }, [atSteps, productId, sectionGroups.safety.length]);
+
+  // A step's text, images and video, shared by the step cards, the accordions
+  // and the safety pop-up
+  function renderStepBody(step: Step) {
+    const embedUrl = step.videoUrl ? getVideoEmbedUrl(step.videoUrl) : null;
+    const isDirectVideo = /\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl ?? "");
+    return (
+      <>
+    {step.contentHtml && (
+      <Box
+        sx={{
+          fontSize: { xs: "0.95rem", sm: "1rem" }, color: colors.text, lineHeight: 1.6,
+          mb: { xs: 2, sm: 3 }, wordBreak: "break-word",
+          "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 }, "& li": { mb: 0.5 },
+          "& strong, & b": { fontWeight: 700 }, "& em, & i": { fontStyle: "italic" },
+          "& a": { color: colors.primary, textDecoration: "underline", "&:hover": { opacity: 0.8 } },
+        }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(step.contentHtml) }}
+      />
+    )}
+
+    {step.imageUrls.length > 0 && (
+      <Box
+        sx={{
+          display: "grid", gap: 2, mb: embedUrl ? { xs: 2, sm: 3 } : 0,
+          gridTemplateColumns: step.imageUrls.length > 1 ? { xs: "1fr", sm: "repeat(auto-fit, minmax(240px, 1fr))" } : "1fr",
+        }}
+      >
+        {step.imageUrls.map((url, i) => {
+          // Stored alt text wins; an empty string means decorative. Unreviewed images fall back to the step title.
+          const fallback = step.imageUrls.length > 1 ? `${step.title} — image ${i + 1}` : step.title;
+          const alt = step.imageAlts[i] ?? fallback;
+          return (
+            <StepImage
+              key={`${url}-${i}`}
+              src={url}
+              alt={alt}
+              onClick={() => {
+                setEnlargedGallery({
+                  items: step.imageUrls.map((u, j) => ({
+                    url: u,
+                    alt: step.imageAlts[j] ?? (step.imageUrls.length > 1 ? `${step.title} — image ${j + 1}` : (step.title || "Step image")),
+                  })),
+                  index: i,
+                });
+                setImgZoom(1);
+              }}
+            />
+          );
+        })}
+      </Box>
+    )}
+
+    {embedUrl && (
+      isDirectVideo ? (
+        <Box component="video" controls sx={{ width: "100%", borderRadius: 1 }}>
+          <source src={step.videoUrl} />
+        </Box>
+      ) : (
+        <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
+          <Box
+            component="iframe"
+            src={embedUrl}
+            title={step.title || "Step video"}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+          />
+        </Box>
+      )
+    )}
+      </>
+    );
+  }
+
+  const safetyButton = (
+    <Tooltip title={tabLabels.safety}>
+      <IconButton
+        onClick={() => setSafetyOpen(true)}
+        aria-label={`Open ${tabLabels.safety}`}
+        aria-haspopup="dialog"
+        sx={{ width: 44, height: 44, color: "#B3261E", border: "2px solid #B3261E", "&:hover": { bgcolor: "rgba(179,38,30,0.08)" } }}
+      >
+        <ErrorOutlineIcon />
+      </IconButton>
+    </Tooltip>
+  );
+
+  // An accordion entry: the main item, with its sub-items nested beneath it
+  function renderAccordion(groups: StepGroup[]) {
+    return groups.map((group) => (
+      <AccordionSection key={group.main.id} title={group.main.title || "Untitled"}>
+        {renderStepBody(group.main)}
+        {group.subSteps.map((sub) => (
+          <Box key={sub.id} sx={{ mt: 3, pl: 2, borderLeft: `3px solid ${colors.lightBorder}` }}>
+            {sub.title && (
+              <Typography variant="h4" sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 700, color: colors.primary, mb: 1.5 }}>
+                {sub.title}
+              </Typography>
+            )}
+            {renderStepBody(sub)}
+          </Box>
+        ))}
+      </AccordionSection>
+    ));
+  }
 
   // Name of whatever the user is looking at now, for the document title
   const currentPageName = useMemo((): string => {
@@ -649,7 +881,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   // ── Step intersection observer ────────────────────────────────────────
 
   useEffect(() => {
-    if (!atSteps || stepEntries.entries.length === 0) return;
+    if (!atSteps || activeTab !== "steps" || stepEntries.entries.length === 0) return;
     visibleStepsRef.current.clear();
     lastTrackedStep.current = -1;
 
@@ -679,7 +911,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
     stepRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
-  }, [atSteps, stepEntries]);
+  }, [atSteps, activeTab, stepEntries]);
 
   // ── Screen-reader step announcements (debounced) ──────────────────────
 
@@ -1025,7 +1257,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
       ? (state.items[parentLevel?.id ?? ""] ?? []).find((i) => i.id === parentEntry.itemId)
       : null;
 
-    if (currentSteps.length === 0) {
+    if (visibleTabs.length === 0) {
       return (
         <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column", bgcolor: colors.lightBg, py: { xs: 4, sm: 5, md: 7 }, pt: previewPt }}>
           <SkipLink />
@@ -1108,22 +1340,91 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                 >
                   {lastItem?.name ?? ""}
                 </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{ fontSize: { xs: "0.9rem", sm: "1rem" }, fontWeight: 600, color: colors.text, letterSpacing: "0.05em" }}
-                >
-                  STEP {stepEntries.entries.length === 0 ? 0 : (stepEntries.entries[activeStepIndex]?.mainStepNumber ?? 1)} OF {stepEntries.totalMainSteps}
-                </Typography>
-                {/* Debounced screen-reader announcement of the visual counter above */}
-                <Box component="p" role="status" sx={srOnlySx}>
-                  {stepEntries.entries.length > 0 ? `Step ${stepEntries.entries[announcedStepIndex]?.mainStepNumber ?? 1} of ${stepEntries.totalMainSteps}` : ""}
-                </Box>
+                {activeTab === "steps" && (
+                  <>
+                    <Typography
+                      variant="body1"
+                      sx={{ fontSize: { xs: "0.9rem", sm: "1rem" }, fontWeight: 600, color: colors.text, letterSpacing: "0.05em" }}
+                    >
+                      STEP {stepEntries.entries.length === 0 ? 0 : (stepEntries.entries[activeStepIndex]?.mainStepNumber ?? 1)} OF {stepEntries.totalMainSteps}
+                    </Typography>
+                    {/* Debounced screen-reader announcement of the visual counter above */}
+                    <Box component="p" role="status" sx={srOnlySx}>
+                      {stepEntries.entries.length > 0 ? `Step ${stepEntries.entries[announcedStepIndex]?.mainStepNumber ?? 1} of ${stepEntries.totalMainSteps}` : ""}
+                    </Box>
+                  </>
+                )}
               </Box>
 
-              <Box sx={{ pb: { xs: 6, sm: 8 } }}>
+              {/* Tabs: Printer Overview, Steps and Appendix, each shown only when it has content */}
+              {visibleTabs.length > 1 && (
+                <ToggleButtonGroup
+                  exclusive
+                  value={activeTab}
+                  role="tablist"
+                  aria-label="Sections of this guide"
+                  onKeyDown={handleTabKeyDown}
+                  sx={{
+                    display: "flex", mb: { xs: 2, sm: 3 }, bgcolor: "white", width: "100%",
+                    "& .MuiToggleButton-root": { flex: 1, px: { xs: 1, sm: 3 }, minHeight: 48, textTransform: "none", fontWeight: 700, color: colors.text },
+                    "& .Mui-selected": { color: `${colors.primary} !important` },
+                  }}
+                >
+                  {visibleTabs.map((tab) => (
+                    <ToggleButton
+                      key={tab}
+                      value={tab}
+                      id={`step-tab-${tab}`}
+                      role="tab"
+                      aria-selected={activeTab === tab}
+                      aria-pressed={undefined}
+                      aria-controls={`step-tabpanel-${tab}`}
+                      tabIndex={activeTab === tab ? 0 : -1}
+                      onClick={() => selectTab(tab)}
+                    >
+                      {tabLabels[tab]}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              )}
+
+              {/* Quick Safety Reminders can be reopened from the overview (or from here when there is no overview) */}
+              {sectionGroups.safety.length > 0 && !visibleTabs.includes("overview") && (
+                <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>{safetyButton}</Box>
+              )}
+
+              {activeTab === "overview" && (
+                <Box
+                  role={visibleTabs.length > 1 ? "tabpanel" : undefined}
+                  id="step-tabpanel-overview"
+                  aria-labelledby={visibleTabs.length > 1 ? "step-tab-overview" : undefined}
+                  sx={{ pb: { xs: 6, sm: 8 } }}
+                >
+                  {sectionGroups.safety.length > 0 && <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>{safetyButton}</Box>}
+                  {renderAccordion(sectionGroups.overview)}
+                </Box>
+              )}
+
+              {activeTab === "appendix" && (
+                <Box
+                  role={visibleTabs.length > 1 ? "tabpanel" : undefined}
+                  id="step-tabpanel-appendix"
+                  aria-labelledby={visibleTabs.length > 1 ? "step-tab-appendix" : undefined}
+                  sx={{ pb: { xs: 6, sm: 8 } }}
+                >
+                  {renderAccordion(sectionGroups.appendix)}
+                </Box>
+              )}
+
+              {activeTab === "steps" && (
+
+              <Box
+                role={visibleTabs.length > 1 ? "tabpanel" : undefined}
+                id="step-tabpanel-steps"
+                aria-labelledby={visibleTabs.length > 1 ? "step-tab-steps" : undefined}
+                sx={{ pb: { xs: 6, sm: 8 } }}
+              >
                 {stepEntries.entries.map(({ step, label, isMain }, index) => {
-                  const embedUrl = step.videoUrl ? getVideoEmbedUrl(step.videoUrl) : null;
-                  const isDirectVideo = /\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl ?? "");
                   return (
                     <Card
                       key={step.id}
@@ -1155,79 +1456,65 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                           )}
                         </Stack>
 
-                        {step.contentHtml && (
-                          <Box
-                            sx={{
-                              fontSize: { xs: "0.95rem", sm: "1rem" }, color: colors.text, lineHeight: 1.6,
-                              mb: { xs: 2, sm: 3 }, wordBreak: "break-word",
-                              "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 }, "& li": { mb: 0.5 },
-                              "& strong, & b": { fontWeight: 700 }, "& em, & i": { fontStyle: "italic" },
-                              "& a": { color: colors.primary, textDecoration: "underline", "&:hover": { opacity: 0.8 } },
-                            }}
-                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(step.contentHtml) }}
-                          />
-                        )}
-
-                        {step.imageUrls.length > 0 && (
-                          <Box
-                            sx={{
-                              display: "grid", gap: 2, mb: embedUrl ? { xs: 2, sm: 3 } : 0,
-                              gridTemplateColumns: step.imageUrls.length > 1 ? { xs: "1fr", sm: "repeat(auto-fit, minmax(240px, 1fr))" } : "1fr",
-                            }}
-                          >
-                            {step.imageUrls.map((url, i) => {
-                              // Stored alt text wins; an empty string means decorative. Unreviewed images fall back to the step title.
-                              const fallback = step.imageUrls.length > 1 ? `${step.title} — image ${i + 1}` : step.title;
-                              const alt = step.imageAlts[i] ?? fallback;
-                              return (
-                                <StepImage
-                                  key={`${url}-${i}`}
-                                  src={url}
-                                  alt={alt}
-                                  onClick={() => {
-                                    setEnlargedGallery({
-                                      items: step.imageUrls.map((u, j) => ({
-                                        url: u,
-                                        alt: step.imageAlts[j] ?? (step.imageUrls.length > 1 ? `${step.title} — image ${j + 1}` : (step.title || "Step image")),
-                                      })),
-                                      index: i,
-                                    });
-                                    setImgZoom(1);
-                                  }}
-                                />
-                              );
-                            })}
-                          </Box>
-                        )}
-
-                        {embedUrl && (
-                          isDirectVideo ? (
-                            <Box component="video" controls sx={{ width: "100%", borderRadius: 1 }}>
-                              <source src={step.videoUrl} />
-                            </Box>
-                          ) : (
-                            <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
-                              <Box
-                                component="iframe"
-                                src={embedUrl}
-                                title={step.title || "Step video"}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                                sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                              />
-                            </Box>
-                          )
-                        )}
+                        {renderStepBody(step)}
                       </CardContent>
                     </Card>
                   );
                 })}
               </Box>
+              )}
             </Box>
           </Container>
         </Box>
 
         <Footer year={new Date().getFullYear()} isAdmin={false} />
+
+        {/* Quick Safety Reminders: opens once per browser session, and from the "!" button */}
+        <Dialog
+          open={safetyOpen}
+          onClose={() => setSafetyOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          scroll="paper"
+          aria-labelledby="safety-dialog-title"
+        >
+          <DialogTitle id="safety-dialog-title" sx={{ display: "flex", alignItems: "center", gap: 1, color: "#B3261E", fontWeight: 800 }}>
+            <ErrorOutlineIcon aria-hidden="true" />
+            {tabLabels.safety}
+          </DialogTitle>
+          <DialogContent dividers>
+            {sectionGroups.safety.map((group) => (
+              <Box key={group.main.id} sx={{ mb: 3, "&:last-child": { mb: 0 } }}>
+                {group.main.title && (
+                  <Typography component="h3" sx={{ fontSize: "1.1rem", fontWeight: 700, color: colors.primary, mb: 1 }}>
+                    {group.main.title}
+                  </Typography>
+                )}
+                {renderStepBody(group.main)}
+                {group.subSteps.map((sub) => (
+                  <Box key={sub.id} sx={{ mt: 2, pl: 2, borderLeft: `3px solid ${colors.lightBorder}` }}>
+                    {sub.title && (
+                      <Typography component="h4" sx={{ fontSize: "1rem", fontWeight: 700, color: colors.primary, mb: 1 }}>
+                        {sub.title}
+                      </Typography>
+                    )}
+                    {renderStepBody(sub)}
+                  </Box>
+                ))}
+              </Box>
+            ))}
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button
+              onClick={() => setSafetyOpen(false)}
+              variant="contained"
+              autoFocus
+              sx={{ minHeight: 44, textTransform: "none", fontWeight: 700, bgcolor: colors.primary, "&:hover": { bgcolor: colors.darkBg } }}
+            >
+              Got it
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Image zoom modal */}
         <Modal

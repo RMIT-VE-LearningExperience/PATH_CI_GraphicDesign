@@ -22,6 +22,7 @@ import {
   Select,
   Stack,
   Switch,
+  Tab,
   Table,
   TableBody,
   TableCell,
@@ -29,6 +30,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -53,12 +55,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-provider";
 import { getAuthInstance } from "../../lib/firebase-client";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
-import { groupSteps } from "../../lib/step-groups";
+import { DEFAULT_STEP_TAB_LABELS, STEP_SECTIONS, groupSteps, type StepSection } from "../../lib/step-groups";
 
 import Sidebar from "./Sidebar";
 import AddEditItemDialog from "./dialogs/AddEditItemDialog";
 import AddEditStepDialog from "./dialogs/AddEditStepDialog";
 import CannotConvertToSubStepDialog from "./dialogs/CannotConvertToSubStepDialog";
+import StepTabsDialog from "./dialogs/StepTabsDialog";
 import SearchLinkDialog from "./dialogs/SearchLinkDialog";
 import ConfirmDeleteDialog from "./dialogs/ConfirmDeleteDialog";
 import InfoDialog from "./dialogs/InfoDialog";
@@ -243,9 +246,12 @@ export default function AdminDashboard() {
     mode: "add" | "edit";
     parentItemId: string;
     step?: Step;
+    section: StepSection;
     stepType: "main" | "sub";
     defaultParentStepId?: string | null;
   } | null>(null);
+  const [stepTab, setStepTab] = useState<StepSection>("steps");
+  const [tabsDialogOpen, setTabsDialogOpen] = useState(false);
   const [blockedConversion, setBlockedConversion] = useState<{ stepTitle: string; subStepTitles: string[] } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [infoOpen, setInfoOpen] = useState<{ item: Item | Step; isStep?: boolean } | null>(null);
@@ -354,10 +360,26 @@ export default function AdminDashboard() {
     return source;
   }, [state, currentLevel, navStack, parentLevel, parentKey, sortColumn, sortAsc]);
 
+  const tabLabels = state?.appSettings.stepTabs ?? DEFAULT_STEP_TAB_LABELS;
+
+  // The overview is written once per printer (the first-level item); every other
+  // tab belongs to the product being edited. With a single level they are the same.
+  function stepOwnerId(section: StepSection): string {
+    return (section === "overview" ? navStack[0]?.itemId : parentEntry?.itemId) ?? "";
+  }
+
+  function stepsFor(section: StepSection): Step[] {
+    return (state?.steps[stepOwnerId(section)] ?? []).filter((step) => step.section === section);
+  }
+
   const currentSteps = useMemo((): Step[] => {
     if (!state || !atSteps || !parentEntry) return [];
-    return state.steps[parentEntry.itemId] ?? [];
-  }, [state, atSteps, parentEntry]);
+    const ownerId = stepTab === "overview" ? navStack[0]?.itemId : parentEntry.itemId;
+    return (state.steps[ownerId ?? ""] ?? []).filter((step) => step.section === stepTab);
+  }, [state, atSteps, parentEntry, navStack, stepTab]);
+
+  // Each product opens on its Steps tab
+  useEffect(() => { setStepTab("steps"); }, [parentEntry?.itemId]);
 
   const stepGroups = useMemo(() => groupSteps(currentSteps), [currentSteps]);
 
@@ -637,10 +659,15 @@ export default function AdminDashboard() {
       const ns = await dispatch("addStep", {
         parentItemId, title: data.title,
         contentHtml: data.contentHtml, imageDataUrls: data.imageDataUrls, videoUrl: data.videoUrl,
-        stepType: data.stepType, parentStepId: data.parentStepId,
+        stepType: data.stepType, parentStepId: data.parentStepId, section: stepDialog.section,
       });
       if (ns) { setStepDialog(null); showAlert(data.stepType === "sub" ? "Sub-step added" : "Step added"); }
     }
+  }
+
+  async function handleSaveTabLabels(labels: Record<StepSection, string>) {
+    const ns = await dispatch("updateAppSettings", { settings: { stepTabs: labels } });
+    if (ns) { setTabsDialogOpen(false); showAlert("Tab names saved"); }
   }
 
   async function handleDragEnd(result: DropResult) {
@@ -651,7 +678,7 @@ export default function AdminDashboard() {
     if (result.type === "SUB") {
       const newParentStepId = result.destination.droppableId.replace(/^sub-/, "");
       await dispatch("reorderSubStep", {
-        parentItemId: parentEntry.itemId,
+        parentItemId: stepOwnerId(stepTab),
         stepId: result.draggableId,
         newParentStepId,
         newIndexWithinParent: result.destination.index,
@@ -660,7 +687,7 @@ export default function AdminDashboard() {
     }
 
     await dispatch("reorderMainStep", {
-      parentItemId: parentEntry.itemId,
+      parentItemId: stepOwnerId(stepTab),
       stepId: result.draggableId,
       newBlockIndex: result.destination.index,
     });
@@ -1011,6 +1038,10 @@ export default function AdminDashboard() {
   ) {
     if (!parentEntry) return null;
     const isSub = step.stepType === "sub";
+    // Only the Steps tab is numbered; the other tabs list plain titled entries
+    const numbered = step.section === "steps";
+    const heading = numbered ? `${isSub ? "Sub-step" : "Step"} ${label}: ${step.title}` : step.title;
+    const what = numbered ? `${isSub ? "sub-step" : "step"} ${label}` : isSub ? "sub-item" : "item";
     return (
         <Paper
           elevation={1}
@@ -1024,7 +1055,7 @@ export default function AdminDashboard() {
             <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, flex: 1 }}>
               <Box
                 {...dragHandleProps}
-                aria-label={`Reorder ${isSub ? "sub-step" : "step"} ${label}: ${step.title}. Press space to pick up, arrow keys to move.`}
+                aria-label={`Reorder ${what}: ${step.title}. Press space to pick up, arrow keys to move.`}
                 sx={{ display: "flex", alignItems: "center", pt: 0.5, cursor: "grab", color: "text.disabled" }}
               >
                 <DragIndicatorIcon fontSize="small" />
@@ -1032,7 +1063,7 @@ export default function AdminDashboard() {
               <Box sx={{ flex: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                   <Typography variant="h6" component="h3" fontWeight={700} sx={{ color: "#45443F" }}>
-                    {isSub ? "Sub-step" : "Step"} {label}: {step.title}
+                    {heading}
                   </Typography>
                   <Button
                     size="small"
@@ -1098,11 +1129,11 @@ export default function AdminDashboard() {
             </Box>
             <IconButton
               size="small"
-              aria-label={`More actions for ${isSub ? "sub-step" : "step"} ${label}: ${step.title}`}
+              aria-label={`More actions for ${what}: ${step.title}`}
               aria-haspopup="menu"
               onClick={(e) => {
                 e.stopPropagation();
-                setMenuTarget({ anchorEl: e.currentTarget, type: "step", id: step.id, extra: parentEntry.itemId, step });
+                setMenuTarget({ anchorEl: e.currentTarget, type: "step", id: step.id, extra: stepOwnerId(step.section), step });
               }}
               sx={{ ml: 1 }}
             >
@@ -1118,21 +1149,61 @@ export default function AdminDashboard() {
 
     return (
       <Box>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 2 }}>
           <Typography variant="h5" component="h2" sx={{ color: "#45443F", fontWeight: 700 }}>
             Steps: {parentEntry.itemName}
           </Typography>
           <Button
-            variant="contained"
-            onClick={() => setStepDialog({ mode: "add", parentItemId: parentEntry.itemId, stepType: "main" })}
-            sx={{ bgcolor: "#000054", color: "#fff", fontWeight: 600, textTransform: "none", "&:hover": { bgcolor: "#00003f" } }}
+            size="small"
+            variant="outlined"
+            onClick={() => setTabsDialogOpen(true)}
+            sx={{ color: "#000054", borderColor: "#000054", fontWeight: 600, textTransform: "none" }}
           >
-            + Add Step
+            Edit tab names
+          </Button>
+        </Box>
+
+        <Tabs
+          value={stepTab}
+          onChange={(_, value: StepSection) => setStepTab(value)}
+          variant="scrollable"
+          scrollButtons="auto"
+          aria-label="Sections of this product"
+          sx={{ mb: 2, borderBottom: 1, borderColor: "divider", "& .MuiTab-root": { textTransform: "none", fontWeight: 600, color: "#45443F" }, "& .Mui-selected": { color: "#000054" }, "& .MuiTabs-indicator": { bgcolor: "#000054" } }}
+        >
+          {STEP_SECTIONS.map((section) => (
+            <Tab
+              key={section}
+              value={section}
+              id={`step-tab-${section}`}
+              aria-controls={`step-tabpanel-${section}`}
+              label={`${tabLabels[section]} (${stepsFor(section).filter((x) => x.stepType === "main").length})`}
+            />
+          ))}
+        </Tabs>
+
+        <Box role="tabpanel" id={`step-tabpanel-${stepTab}`} aria-labelledby={`step-tab-${stepTab}`}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 3 }}>
+          <Typography variant="body2" color="text.secondary">
+            {stepTab === "overview"
+              ? `Written once for ${navStack[0]?.itemName ?? "this printer"} and shown on every product under it. Shown to visitors as an accordion.`
+              : stepTab === "steps"
+                ? "Numbered steps. Drag to reorder, and nest sub-steps under a main step."
+                : stepTab === "appendix"
+                  ? "Extra reference material for this product. Shown to visitors as an accordion."
+                  : "Shown to visitors as a pop-up the first time they open this product in a browser session."}
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={() => setStepDialog({ mode: "add", parentItemId: stepOwnerId(stepTab), section: stepTab, stepType: "main" })}
+            sx={{ bgcolor: "#000054", color: "#fff", fontWeight: 600, textTransform: "none", whiteSpace: "nowrap", "&:hover": { bgcolor: "#00003f" } }}
+          >
+            {stepTab === "steps" ? "+ Add Step" : "+ Add Item"}
           </Button>
         </Box>
 
         {currentSteps.length === 0 ? (
-          <Typography color="text.secondary">No steps added yet.</Typography>
+          <Typography color="text.secondary">{stepTab === "steps" ? "No steps added yet." : `Nothing in ${tabLabels[stepTab]} yet. Visitors will not see this tab until you add something.`}</Typography>
         ) : (
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="main-steps" type="MAIN">
@@ -1171,13 +1242,13 @@ export default function AdminDashboard() {
                                 <Button
                                   size="small"
                                   onClick={() => setStepDialog({
-                                    mode: "add", parentItemId: parentEntry.itemId,
+                                    mode: "add", parentItemId: stepOwnerId(stepTab), section: stepTab,
                                     stepType: "sub", defaultParentStepId: group.main.id,
                                   })}
-                                  aria-label={`Add a sub-step under step ${mainIndex + 1}: ${group.main.title}`}
+                                  aria-label={`Add a sub-${stepTab === "steps" ? "step" : "item"} under ${stepTab === "steps" ? `step ${mainIndex + 1}: ` : ""}${group.main.title}`}
                                   sx={{ alignSelf: "flex-start", color: "#000054", textTransform: "none", fontWeight: 600 }}
                                 >
-                                  + Add Sub-step
+                                  {stepTab === "steps" ? "+ Add Sub-step" : "+ Add Sub-item"}
                                 </Button>
                               </Box>
                             )}
@@ -1192,6 +1263,7 @@ export default function AdminDashboard() {
             </Droppable>
           </DragDropContext>
         )}
+        </Box>
       </Box>
     );
   }
@@ -1501,7 +1573,7 @@ export default function AdminDashboard() {
     function onEdit() {
       handleClose();
       if (type === "item" && item && extra) setItemDialog({ mode: "edit", levelId: extra, item, isGlobalList: !!globalListLevelId });
-      else if (type === "step" && step && extra) setStepDialog({ mode: "edit", parentItemId: extra, step, stepType: step.stepType, defaultParentStepId: step.parentStepId });
+      else if (type === "step" && step && extra) setStepDialog({ mode: "edit", parentItemId: extra, step, section: step.section, stepType: step.stepType, defaultParentStepId: step.parentStepId });
     }
 
     function onInfo() {
@@ -1570,7 +1642,7 @@ export default function AdminDashboard() {
 
   // ── Main render ───────────────────────────────────────────────────────
 
-  const stepDialogSteps = state?.steps[stepDialog?.parentItemId ?? ""] ?? [];
+  const stepDialogSteps = (state?.steps[stepDialog?.parentItemId ?? ""] ?? []).filter((x) => x.section === (stepDialog?.section ?? "steps"));
   const stepDialogGroups = groupSteps(stepDialogSteps);
   const stepDialogMainOptions = stepDialogGroups.map((g) => ({ id: g.main.id, title: g.main.title }));
   let stepDialogLabel = "1";
@@ -1758,7 +1830,8 @@ export default function AdminDashboard() {
         onSave={(d) => void handleSaveStep(d)}
         loading={actionLoading}
         mode={stepDialog?.mode ?? "add"}
-        stepLabel={stepDialogLabel}
+        stepLabel={stepDialog?.section === "steps" || !stepDialog ? stepDialogLabel : undefined}
+        sectionName={stepDialog && stepDialog.section !== "steps" ? tabLabels[stepDialog.section] : undefined}
         stepId={stepDialog?.step?.id}
         stepType={stepDialog?.stepType ?? "main"}
         parentStepId={stepDialog?.defaultParentStepId ?? null}
@@ -1778,6 +1851,14 @@ export default function AdminDashboard() {
           subStepTitles={blockedConversion.subStepTitles}
         />
       )}
+
+      <StepTabsDialog
+        open={tabsDialogOpen}
+        onClose={() => setTabsDialogOpen(false)}
+        labels={tabLabels}
+        loading={actionLoading}
+        onSave={(labels) => void handleSaveTabLabels(labels)}
+      />
 
       <ConfirmDeleteDialog
         open={!!deleteTarget}
