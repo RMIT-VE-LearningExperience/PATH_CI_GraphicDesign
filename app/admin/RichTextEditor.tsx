@@ -5,6 +5,7 @@ import {
   FormatBold as FormatBoldIcon,
   FormatItalic as FormatItalicIcon,
   FormatUnderlined as FormatUnderlinedIcon,
+  FormatListNumbered as FormatListNumberedIcon,
   List as ListIcon,
   Link as LinkIcon,
   LinkOff as LinkOffIcon,
@@ -51,6 +52,7 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
           { icon: <FormatItalicIcon />, cmd: "italic", title: "Italic" },
           { icon: <FormatUnderlinedIcon />, cmd: "underline", title: "Underline" },
           { icon: <ListIcon />, cmd: "insertUnorderedList", title: "Bullets" },
+          { icon: <FormatListNumberedIcon />, cmd: "insertOrderedList", title: "Numbered list" },
         ].map(({ icon, cmd, title }) => (
           <IconButton
             key={cmd}
@@ -108,6 +110,7 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
           py: 1.25,
           minHeight: 170,
           outline: "none",
+          "& ul, & ol": { pl: 3, my: 0.5 },
           "&:focus": {
             borderColor: "primary.main",
             boxShadow: (theme) => `0 0 0 1px ${theme.palette.primary.main}`,

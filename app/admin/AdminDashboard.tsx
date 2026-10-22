@@ -1056,7 +1056,7 @@ export default function AdminDashboard() {
                       <Box
                         sx={{
                           p: 2, bgcolor: "action.hover", borderRadius: 1, mb: 2,
-                          "& p": { mb: 1 }, "& ul": { pl: 2, mb: 1 },
+                          "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 },
                         }}
                         dangerouslySetInnerHTML={{ __html: step.contentHtml }}
                       />
