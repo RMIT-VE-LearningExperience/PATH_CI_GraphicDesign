@@ -81,6 +81,7 @@ Last updated: 2026-10-22. Status: phases 1 to 3 pushed to `Staging-GraphicDesign
 
 ## Open items
 - Next action: phase 5 and 6 items in the build order (the Safety pop-up is built as part of phase 4, so only the final checks remain).
-- Choices I made that you may want to change: the default tab is Steps (not Printer Overview); accordions start collapsed; the "!" button sits inside the Printer Overview tab.
+- Decided with the user: a product opens on **Printer Overview** the first time it is opened in a browser session (when it has an overview), and on Steps after that. A `?tab=` link always wins. Tracked per product in `sessionStorage`, like the safety pop-up.
+- Choices I made that you may want to change: accordions start collapsed; the "!" button sits inside the Printer Overview tab.
 - Staging and main share one Firestore database (`path-ci-graphicdesign`). Content edits in staging also show on main. A separate staging database was discussed and not yet decided.
 - Before any push: ask first (Staging only).

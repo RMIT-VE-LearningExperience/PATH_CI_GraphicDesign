@@ -40,7 +40,7 @@ import {
   KeyboardArrowUp as KeyboardArrowUpIcon,
   Remove as RemoveIcon,
 } from "@mui/icons-material";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "./GoogleAnalytics";
 import Footer from "./Footer";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
@@ -540,10 +540,34 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     }
   }, [atSteps, productId]);
 
+  // The first time a visitor opens a product in a browser session it opens on
+  // Printer Overview (when it has one); after that it opens on Steps. A tab
+  // picked by the visitor, or named in the link, always wins.
+  const [overviewFirstFor, setOverviewFirstFor] = useState<string | null>(null);
+  const overviewSeenRef = useRef(new Set<string>());
+  const hasOverviewTab = visibleTabs.includes("overview");
+  // Layout effect so the first paint is already on the right tab; plain
+  // useEffect on the server, where layout effects only produce a warning
+  const useTabEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+  useTabEffect(() => {
+    if (!atSteps || !productId || !hasOverviewTab) return;
+    const key = `path_overview_seen_${productId}`;
+    let seen = overviewSeenRef.current.has(key);
+    try { seen = seen || window.sessionStorage.getItem(key) === "1"; } catch { /* storage unavailable: fall back to the in-memory record */ }
+    if (seen) return;
+    overviewSeenRef.current.add(key);
+    try { window.sessionStorage.setItem(key, "1"); } catch { /* ignore */ }
+    setOverviewFirstFor(productId);
+  }, [atSteps, productId, hasOverviewTab]);
+
+  const defaultTab: StepSection =
+    overviewFirstFor === productId && hasOverviewTab
+      ? "overview"
+      : visibleTabs.includes("steps") ? "steps" : (visibleTabs[0] ?? "steps");
   const activeTab: StepSection =
     tabChoice && tabChoice.itemId === productId && visibleTabs.includes(tabChoice.tab)
       ? tabChoice.tab
-      : visibleTabs.includes("steps") ? "steps" : (visibleTabs[0] ?? "steps");
+      : defaultTab;
 
   function selectTab(tab: StepSection) {
     setTabChoice({ itemId: productId, tab });
