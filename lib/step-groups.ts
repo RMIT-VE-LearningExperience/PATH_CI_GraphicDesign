@@ -17,6 +17,14 @@ export const DEFAULT_STEP_TAB_LABELS: Record<StepSection, string> = {
   safety: "Quick Safety Reminders",
 };
 
+// Tabs can be switched off for the whole app; a switched-off tab is hidden from visitors
+export const DEFAULT_STEP_TAB_ACTIVE: Record<StepSection, boolean> = {
+  overview: true,
+  steps: true,
+  appendix: true,
+  safety: true,
+};
+
 export const STEP_TAB_LABEL_MAX_LENGTH = 40;
 
 export function isStepSection(value: unknown): value is StepSection {

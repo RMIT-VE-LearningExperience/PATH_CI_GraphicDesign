@@ -12,6 +12,7 @@ import {
   Collapse,
   Divider,
   FormControl,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   InputLabel,
@@ -56,7 +57,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-provider";
 import { getAuthInstance } from "../../lib/firebase-client";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
-import { DEFAULT_STEP_TAB_LABELS, STEP_SECTIONS, STEP_TAB_LABEL_MAX_LENGTH, groupSteps, type StepSection } from "../../lib/step-groups";
+import { DEFAULT_STEP_TAB_ACTIVE, DEFAULT_STEP_TAB_LABELS, STEP_SECTIONS, STEP_TAB_LABEL_MAX_LENGTH, groupSteps, type StepSection } from "../../lib/step-groups";
 
 import Sidebar from "./Sidebar";
 import AddEditItemDialog from "./dialogs/AddEditItemDialog";
@@ -254,6 +255,7 @@ export default function AdminDashboard() {
   // Edit mode for the tab names: one pencil switches every tab into a text field
   const [editingTabs, setEditingTabs] = useState(false);
   const [tabDrafts, setTabDrafts] = useState<Record<StepSection, string>>(DEFAULT_STEP_TAB_LABELS);
+  const [tabActiveDrafts, setTabActiveDrafts] = useState<Record<StepSection, boolean>>(DEFAULT_STEP_TAB_ACTIVE);
   const [blockedConversion, setBlockedConversion] = useState<{ stepTitle: string; subStepTitles: string[] } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [infoOpen, setInfoOpen] = useState<{ item: Item | Step; isStep?: boolean } | null>(null);
@@ -363,6 +365,7 @@ export default function AdminDashboard() {
   }, [state, currentLevel, navStack, parentLevel, parentKey, sortColumn, sortAsc]);
 
   const tabLabels = state?.appSettings.stepTabs ?? DEFAULT_STEP_TAB_LABELS;
+  const tabActive = state?.appSettings.stepTabsActive ?? DEFAULT_STEP_TAB_ACTIVE;
 
   // The overview is written once per printer (the first-level item); every other
   // tab belongs to the product being edited. With a single level they are the same.
@@ -675,20 +678,26 @@ export default function AdminDashboard() {
 
   function startEditingTabs() {
     setTabDrafts({ ...tabLabels });
+    setTabActiveDrafts({ ...tabActive });
     setEditingTabs(true);
   }
 
   async function saveTabNames() {
-    const changed: Partial<Record<StepSection, string>> = {};
+    const changedNames: Partial<Record<StepSection, string>> = {};
+    const changedActive: Partial<Record<StepSection, boolean>> = {};
     for (const section of STEP_SECTIONS) {
       const name = tabDrafts[section].trim();
       if (!name) return; // every tab needs a name
-      if (name !== tabLabels[section]) changed[section] = name;
+      if (name !== tabLabels[section]) changedNames[section] = name;
+      if (tabActiveDrafts[section] !== tabActive[section]) changedActive[section] = tabActiveDrafts[section];
     }
-    if (Object.keys(changed).length === 0) { leaveTabEditMode(); return; }
-    // Only the tabs that changed are sent; the names apply to every product
-    const ns = await dispatch("updateAppSettings", { settings: { stepTabs: changed } });
-    if (ns) { leaveTabEditMode(); showAlert("Tab names saved"); }
+    if (Object.keys(changedNames).length === 0 && Object.keys(changedActive).length === 0) { leaveTabEditMode(); return; }
+    // Only what changed is sent; names and on/off settings apply to every product
+    const settings: Record<string, unknown> = {};
+    if (Object.keys(changedNames).length > 0) settings.stepTabs = changedNames;
+    if (Object.keys(changedActive).length > 0) settings.stepTabsActive = changedActive;
+    const ns = await dispatch("updateAppSettings", { settings });
+    if (ns) { leaveTabEditMode(); showAlert("Tab settings saved"); }
   }
 
   function handleStepTabKeyDown(e: React.KeyboardEvent) {
@@ -1197,20 +1206,33 @@ export default function AdminDashboard() {
               sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, py: 0.75, minWidth: 0, flex: 1 }}
             >
               {STEP_SECTIONS.map((section, i) => (
-                <TextField
-                  key={section}
-                  size="small"
-                  autoFocus={i === 0}
-                  value={tabDrafts[section]}
-                  onChange={(e) => setTabDrafts((prev) => ({ ...prev, [section]: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); void saveTabNames(); }
-                    else if (e.key === "Escape") { e.stopPropagation(); leaveTabEditMode(); }
-                  }}
-                  inputProps={{ maxLength: STEP_TAB_LABEL_MAX_LENGTH, "aria-label": `Name of the ${tabLabels[section]} tab` }}
-                  error={!tabDrafts[section].trim()}
-                  sx={{ flex: { xs: "1 1 100%", sm: "1 1 150px" }, minWidth: 0, maxWidth: { sm: 260 } }}
-                />
+                <Box key={section} sx={{ flex: { xs: "1 1 100%", sm: "1 1 150px" }, minWidth: 0, maxWidth: { sm: 260 } }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    autoFocus={i === 0}
+                    value={tabDrafts[section]}
+                    onChange={(e) => setTabDrafts((prev) => ({ ...prev, [section]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); void saveTabNames(); }
+                      else if (e.key === "Escape") { e.stopPropagation(); leaveTabEditMode(); }
+                    }}
+                    inputProps={{ maxLength: STEP_TAB_LABEL_MAX_LENGTH, "aria-label": `Name of the ${tabLabels[section]} tab` }}
+                    error={!tabDrafts[section].trim()}
+                  />
+                  <FormControlLabel
+                    sx={{ ml: 0.5, mr: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={tabActiveDrafts[section]}
+                        onChange={(e) => setTabActiveDrafts((prev) => ({ ...prev, [section]: e.target.checked }))}
+                        inputProps={{ "aria-label": `Show the ${tabLabels[section]} tab to visitors` }}
+                      />
+                    }
+                    label={<Typography variant="caption" color="text.secondary">{tabActiveDrafts[section] ? "Shown" : "Hidden"}</Typography>}
+                  />
+                </Box>
               ))}
             </Box>
           ) : (
@@ -1229,11 +1251,12 @@ export default function AdminDashboard() {
                     sx={{
                       px: 2, py: 1.5, mb: "-1px", fontFamily: "inherit", fontSize: "0.875rem", fontWeight: 600,
                       color: selected ? "#000054" : "#45443F",
+                      opacity: tabActive[section] ? 1 : 0.6,
                       borderBottom: "2px solid", borderColor: selected ? "#000054" : "transparent",
                       "&:focus-visible": { outline: "3px solid #000054", outlineOffset: -3 },
                     }}
                   >
-                    {tabLabels[section]} ({stepsFor(section).filter((x) => x.stepType === "main").length})
+                    {tabLabels[section]} ({stepsFor(section).filter((x) => x.stepType === "main").length}){tabActive[section] ? "" : " · Hidden"}
                   </ButtonBase>
                 );
               })}
@@ -1279,6 +1302,11 @@ export default function AdminDashboard() {
         </Box>
 
         <Box role={editingTabs ? undefined : "tabpanel"} id={`step-tabpanel-${stepTab}`} aria-labelledby={editingTabs ? undefined : `step-tab-${stepTab}`}>
+        {!tabActive[stepTab] && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            This tab is hidden from visitors. Its content is kept and you can keep editing it. Use the pencil to switch it back on.
+          </Alert>
+        )}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 3 }}>
           <Typography variant="body2" color="text.secondary">
             {stepTab === "overview"

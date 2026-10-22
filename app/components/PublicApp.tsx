@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Collapse,
   Container,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -44,7 +45,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { trackEvent } from "./GoogleAnalytics";
 import Footer from "./Footer";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
-import { DEFAULT_STEP_TAB_LABELS, groupSteps, isStepSection, type StepGroup, type StepSection } from "../../lib/step-groups";
+import { DEFAULT_STEP_TAB_ACTIVE, DEFAULT_STEP_TAB_LABELS, groupSteps, isStepSection, type StepGroup, type StepSection } from "../../lib/step-groups";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -513,20 +514,23 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   const productId = parentEntry?.itemId ?? "";
   const printerId = selectionStack[0]?.itemId ?? "";
 
+  // Tabs an admin has switched off are hidden here, whatever they contain
+  const tabActive = state?.appSettings?.stepTabsActive ?? DEFAULT_STEP_TAB_ACTIVE;
+
   const sectionGroups = useMemo(() => {
     const pick = (ownerId: string, section: StepSection): StepGroup[] =>
-      groupSteps((state?.steps[ownerId] ?? []).filter((step) => step.section === section));
+      tabActive[section] ? groupSteps((state?.steps[ownerId] ?? []).filter((step) => step.section === section)) : [];
     if (!state || !atSteps || !productId) return { overview: [], appendix: [], safety: [] } as Record<"overview" | "appendix" | "safety", StepGroup[]>;
     return { overview: pick(printerId, "overview"), appendix: pick(productId, "appendix"), safety: pick(productId, "safety") };
-  }, [state, atSteps, productId, printerId]);
+  }, [state, atSteps, productId, printerId, tabActive]);
 
   const visibleTabs = useMemo((): StepSection[] => {
     const tabs: StepSection[] = [];
     if (sectionGroups.overview.length > 0) tabs.push("overview");
-    if (stepEntries.entries.length > 0) tabs.push("steps");
+    if (stepEntries.entries.length > 0 && tabActive.steps) tabs.push("steps");
     if (sectionGroups.appendix.length > 0) tabs.push("appendix");
     return tabs;
-  }, [sectionGroups, stepEntries]);
+  }, [sectionGroups, stepEntries, tabActive]);
 
   // The tab a visitor picked (or arrived on through ?tab=), tied to the product
   // it was chosen for so moving to another product starts on Steps again
@@ -596,7 +600,32 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
   // Quick Safety Reminders: shown once per browser session for each product
   const [safetyOpen, setSafetyOpen] = useState(false);
+  // When the pop-up opens by itself, "I have read..." stays locked until the visitor has scrolled
+  // to the end. Reopening it from the "!" button is not locked.
+  const [safetyMustRead, setSafetyMustRead] = useState(false);
+  const [safetyReached, setSafetyReached] = useState(false); // scrolled to the end
+  const [safetyFits, setSafetyFits] = useState(false); // everything is visible without scrolling
+  const [safetyScroller, setSafetyScroller] = useState<HTMLDivElement | null>(null);
+  const safetyCanClose = !safetyMustRead || safetyReached || safetyFits;
   const safetySeenRef = useRef(new Set<string>());
+
+  // Watch the scroll area: a short pop-up needs no scrolling, and images that load late can make it taller
+  useEffect(() => {
+    if (!safetyScroller) return;
+    const measure = () => setSafetyFits(safetyScroller.scrollHeight <= safetyScroller.clientHeight + 2);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(safetyScroller);
+    Array.from(safetyScroller.children).forEach((child) => observer.observe(child));
+    return () => observer.disconnect();
+  }, [safetyScroller, safetyOpen]);
+
+  function openSafety(automatic: boolean) {
+    setSafetyMustRead(automatic);
+    setSafetyReached(false);
+    setSafetyOpen(true);
+  }
   useEffect(() => {
     if (!atSteps || !productId || sectionGroups.safety.length === 0) return;
     const key = `path_safety_seen_${productId}`;
@@ -605,7 +634,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     if (seen) return;
     safetySeenRef.current.add(key);
     try { window.sessionStorage.setItem(key, "1"); } catch { /* ignore */ }
-    setSafetyOpen(true);
+    openSafety(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atSteps, productId, sectionGroups.safety.length]);
 
   // A step's text, images and video, shared by the step cards, the accordions
@@ -686,7 +716,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   const safetyButton = (
     <Tooltip title={tabLabels.safety}>
       <IconButton
-        onClick={() => setSafetyOpen(true)}
+        onClick={() => openSafety(false)}
         aria-label={`Open ${tabLabels.safety}`}
         aria-haspopup="dialog"
         sx={{ width: 44, height: 44, color: "#B3261E", "&:hover": { bgcolor: "rgba(179,38,30,0.08)" }, "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: 2 } }}
@@ -1370,6 +1400,16 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                 >
                   {lastItem?.name ?? ""}
                 </Typography>
+                {activeTab !== "steps" && (
+                  // Overview and Appendix have no step counter; keep its height so the strip does not change size between tabs
+                  <Typography
+                    variant="body1"
+                    aria-hidden="true"
+                    sx={{ visibility: "hidden", fontSize: { xs: "0.8rem", sm: "1rem" }, lineHeight: { xs: 1.3, sm: 1.5 }, fontWeight: 600, letterSpacing: "0.05em" }}
+                  >
+                    STEP 1 OF 1
+                  </Typography>
+                )}
                 {activeTab === "steps" && (
                   <>
                     <Typography
@@ -1508,7 +1548,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
         {/* Quick Safety Reminders: opens once per browser session, and from the "!" button */}
         <Dialog
           open={safetyOpen}
-          onClose={() => setSafetyOpen(false)}
+          // Escape and clicking outside only work once the visitor is allowed to close it
+          onClose={() => { if (safetyCanClose) setSafetyOpen(false); }}
           maxWidth="sm"
           fullWidth
           scroll="paper"
@@ -1518,9 +1559,22 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
             <ErrorOutlineIcon aria-hidden="true" />
             {tabLabels.safety}
           </DialogTitle>
-          <DialogContent dividers>
-            {sectionGroups.safety.map((group) => (
-              <Box key={group.main.id} sx={{ mb: 3, "&:last-child": { mb: 0 } }}>
+          <DialogContent
+            dividers
+            ref={setSafetyScroller}
+            // A scrollable area must be reachable by keyboard, so it is focusable and named
+            tabIndex={0}
+            role="region"
+            aria-label={safetyCanClose ? tabLabels.safety : `${tabLabels.safety}. Scroll to the end to unlock the confirm button.`}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) setSafetyReached(true);
+            }}
+            sx={{ "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: -3 } }}
+          >
+            {sectionGroups.safety.map((group, index) => (
+              <Box key={group.main.id}>
+                {index > 0 && <Divider sx={{ my: 3 }} />}
                 {group.main.title && (
                   <Typography component="h3" sx={{ fontSize: "1.1rem", fontWeight: 700, color: colors.primary, mb: 1 }}>
                     {group.main.title}
@@ -1543,11 +1597,12 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           <DialogActions sx={{ p: 2 }}>
             <Button
               onClick={() => setSafetyOpen(false)}
+              disabled={!safetyCanClose}
               variant="contained"
-              autoFocus
+              fullWidth
               sx={{ minHeight: 44, textTransform: "none", fontWeight: 700, bgcolor: colors.primary, "&:hover": { bgcolor: colors.darkBg } }}
             >
-              Got it
+              I have read and understood the {tabLabels.safety}.
             </Button>
           </DialogActions>
         </Dialog>

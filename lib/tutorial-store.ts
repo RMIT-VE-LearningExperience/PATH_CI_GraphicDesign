@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 
 import { db, adminDb } from "./firebase-admin";
-import { DEFAULT_STEP_TAB_LABELS, STEP_TAB_LABEL_MAX_LENGTH, isStepSection, type StepSection } from "./step-groups";
+import { DEFAULT_STEP_TAB_ACTIVE, DEFAULT_STEP_TAB_LABELS, STEP_TAB_LABEL_MAX_LENGTH, isStepSection, type StepSection } from "./step-groups";
 import { resolveImageUrl } from "./media-storage";
 
 // ============= TYPES =============
@@ -32,6 +32,8 @@ export type AppSettings = {
   };
   // Names of the tabs on the Steps page, shared by the whole app
   stepTabs: Record<StepSection, string>;
+  // Which tabs visitors can see. A switched-off tab keeps its content and stays editable in the admin.
+  stepTabsActive: Record<StepSection, boolean>;
 };
 
 export type Item = {
@@ -123,6 +125,7 @@ function defaultAppSettings(): AppSettings {
       fullItemListView: true,
     },
     stepTabs: { ...DEFAULT_STEP_TAB_LABELS },
+    stepTabsActive: { ...DEFAULT_STEP_TAB_ACTIVE },
   };
 }
 
@@ -282,6 +285,7 @@ export async function getTutorialState(publishedOnly = false): Promise<TutorialS
   const appSettings: AppSettings = {
     features: { ...defaults.features, ...saved.features },
     stepTabs: { ...defaults.stepTabs, ...saved.stepTabs },
+    stepTabsActive: { ...defaults.stepTabsActive, ...saved.stepTabsActive },
   };
 
   const homepageData = homepageSnap.data();
@@ -1025,6 +1029,14 @@ export async function updateAppSettings(settings: Partial<AppSettings>): Promise
       if (isStepSection(section) && trimmed) stepTabs[section] = trimmed.slice(0, STEP_TAB_LABEL_MAX_LENGTH);
     }
     clean.stepTabs = stepTabs as AppSettings["stepTabs"];
+  }
+  if (settings.stepTabsActive) {
+    // Keep only known tabs with a true/false value
+    const stepTabsActive: Partial<Record<StepSection, boolean>> = {};
+    for (const [section, active] of Object.entries(settings.stepTabsActive)) {
+      if (isStepSection(section) && typeof active === "boolean") stepTabsActive[section] = active;
+    }
+    clean.stepTabsActive = stepTabsActive as AppSettings["stepTabsActive"];
   }
   await db.collection("settings").doc("appSettings").set(clean, { merge: true });
 }

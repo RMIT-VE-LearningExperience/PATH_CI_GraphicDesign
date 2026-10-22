@@ -82,6 +82,11 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 t
    - Public: the safety "!" button has no ring and sits at the left edge of the content.
    - Public: the tab bar sits in the sticky strip with the title, and the strip is compact on phones (about 100px of an 800px screen at 375px wide).
 
+8. [x] Further follow-ups (committed locally, not yet pushed):
+   - Safety pop-up: a divider between sections; the content scrolls in a keyboard-focusable, named region. When it opens by itself the confirm button ("I have read and understood the <safety tab name>.") stays locked until the visitor scrolls to the end, and Esc and outside clicks are blocked until then. A pop-up that fits without scrolling unlocks at once, and reopening from the "!" button is never locked.
+   - Public: Overview and Appendix keep the height of the "STEP X OF Y" line (an invisible placeholder), so the sticky strip is the same size on every tab.
+   - Admin and backend: each tab can be switched on or off for the whole app (`settings/appSettings.stepTabsActive`). The switches appear beside each tab name in edit mode and are saved with the tick, together with any renames, in one request that sends only what changed. A switched-off tab is hidden from visitors (and the Safety switch also removes the "!" button) but stays in the admin, dimmed and marked "Hidden", with a note, so it can still be edited. If every tab is off, visitors see "Content unavailable, check with staff".
+
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.
 - Level `enabled` flag exists, and the app already skips disabled levels.
