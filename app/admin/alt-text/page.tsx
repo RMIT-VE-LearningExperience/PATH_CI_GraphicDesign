@@ -30,6 +30,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../auth-provider";
 import { getAuthInstance } from "../../../lib/firebase-client";
 import type { AltTextEntry, TutorialState } from "../../../lib/tutorial-store";
+import { stepLabels } from "../../../lib/step-groups";
 import type { AltTextProposal, SkippedImage } from "../../../lib/alt-text-review";
 
 const TEAL = "#000054";
@@ -80,7 +81,9 @@ function buildRows(state: TutorialState): Row[] {
     );
     for (const [parentItemId, steps] of Object.entries(state.steps)) {
       const parent = lastLevelItems.get(parentItemId);
-      steps.forEach((step, index) => {
+      const labels = stepLabels(steps);
+      steps.forEach((step) => {
+        const label = labels.get(step.id) ?? "";
         step.imageUrls.forEach((imageUrl, imageIndex) => {
           const currentAlt = step.imageAlts[imageIndex] ?? undefined;
           const imageLabel = step.imageUrls.length > 1 ? ` (image ${imageIndex + 1} of ${step.imageUrls.length})` : "";
@@ -89,7 +92,7 @@ function buildRows(state: TutorialState): Row[] {
             kind: "step-image",
             parentItemId,
             stepId: step.id,
-            location: `${parent?.name ?? parentItemId} → Step ${index + 1}: ${step.title}${imageLabel}`,
+            location: `${parent?.name ?? parentItemId} → ${step.stepType === "sub" ? "Sub-step" : "Step"} ${label}: ${step.title}${imageLabel}`,
             imageUrl,
             currentAlt,
             draftAlt: currentAlt ?? "",

@@ -1,6 +1,6 @@
 # GraphicDesign restructure: plan and progress log
 
-Last updated: 2026-10-22. Status: phases 1 and 2 done. Phase 1 is on Staging. Phase 2 is committed locally and not yet pushed.
+Last updated: 2026-10-22. Status: phases 1 to 3 done and pushed to `Staging-GraphicDesign`. Next: phase 4 (tabs).
 
 ## Ground rules
 - Build on a branch based on `Staging-GraphicDesign`. Never push to `main`. Confirm before any push (see CLAUDE.md on Staging).
@@ -49,7 +49,16 @@ Last updated: 2026-10-22. Status: phases 1 and 2 done. Phase 1 is on Staging. Ph
    - Admin step dialog: add many images, drag to reorder, crop and remove each. The video URL can now be set alongside images (no more image-or-video toggle), as in Apparel.
    - Public: a gallery grid per step, and the viewer has previous/next buttons and arrow keys. Stored alt text is used, with the step title as the fallback.
    - Checks: `tsc`, `next lint` and `next build` pass (build with placeholder Firebase env). Not yet tested against a live database.
-3. [ ] Sub-steps (backend, admin dialog, public display, alt-text coverage).
+3. [x] Sub-steps, ported from Apparel. Details:
+   - Backend: steps have `stepType` ("main"/"sub") and `parentStepId`, kept in one flat ordered list. Older steps read as main steps.
+   - Backend actions: `reorderMainStep` and `reorderSubStep` replace `setStepOrder`. Deleting a main step soft-deletes its sub-steps, and a main step with sub-steps cannot become a sub-step.
+   - Shared helper `lib/step-groups.ts` (`groupSteps`, `stepLabels`) gives numbering "1", "1.1", and so on.
+   - Admin: a nested drag-and-drop list, "+ Add Sub-step" under each main step, and a step-type selector with a parent picker in the step dialog.
+   - Public: sub-steps are indented under the main step (h3 under h2). The "STEP X OF Y" counter counts main steps only.
+   - Alt-text tool lists sub-step images with their numbers.
+   - Sub-steps are tied to the step list, so they will work in every tab once tabs exist (phase 4).
+   - Bug fixed while testing: public step images had collapsed to zero height, because `p: 0` came after `paddingBottom` in `StepImage`. This bug predates phase 2.
+   - Checks: `tsc`, `next lint` and `next build` pass. A browser check with mock data confirmed the labels, headings, counter, image gallery and viewer. An in-memory Firestore test covered add, reorder, convert, cascade delete, alt-text apply and old-document upgrade, and all passed. Not yet tried against the live database.
 4. [ ] Tabs: `section` field, app-wide editable labels, admin tab editor, public tabs with links, empty-tab hiding.
 5. [ ] Safety popup (once per browser session) plus the "!" icon.
 6. [ ] Final checks: lint, build, accessibility check (axe), seed-content check.
@@ -63,6 +72,7 @@ Last updated: 2026-10-22. Status: phases 1 and 2 done. Phase 1 is on Staging. Ph
 - Visual Arts `main` has no tab component on its steps page.
 
 ## Open items
-- None blocking. Next action: phase 3 (sub-steps).
+- None blocking. Next action: phase 4 (tabs: `section` field, app-wide tab labels, Overview, Steps, Appendix and the Safety popup).
+- For phase 4: sub-steps already work on any step list, so each tab's list can reuse `groupSteps`. Overview and Appendix show sub-steps inside the parent's accordion panel, with no numbers.
 - Staging and main share one Firestore database (`path-ci-graphicdesign`). Content edits in staging also show on main. A separate staging database was discussed and not yet decided.
 - Before any push: ask first (Staging only).

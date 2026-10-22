@@ -1,3 +1,4 @@
+import { stepLabels } from "./step-groups";
 import { getTutorialState, type Level, type TutorialState } from "./tutorial-store";
 import { fetchImageAsDataUrl, getValModel, valChatCompletion, type ValMessage } from "./val-client";
 
@@ -145,7 +146,9 @@ function collectTargets(state: TutorialState, filters: AltTextReviewFilters): Re
         ? `${levelById.get(lastLevel.id)?.singularName ?? "Item"} "${parent.name}"`
         : "an unknown item";
 
-      steps.forEach((step, index) => {
+      const labels = stepLabels(steps);
+      steps.forEach((step) => {
+        const label = labels.get(step.id) ?? "";
         step.imageUrls.forEach((imageUrl, imageIndex) => {
           const imageLabel = step.imageUrls.length > 1 ? ` (image ${imageIndex + 1} of ${step.imageUrls.length})` : "";
           targets.push({
@@ -154,10 +157,10 @@ function collectTargets(state: TutorialState, filters: AltTextReviewFilters): Re
             parentItemId,
             stepId: step.id,
             name: step.title,
-            location: `${parent?.name ?? parentItemId} → Step ${index + 1}: ${step.title}${imageLabel}`,
+            location: `${parent?.name ?? parentItemId} → ${step.stepType === "sub" ? "Sub-step" : "Step"} ${label}: ${step.title}${imageLabel}`,
             imageUrl,
             context: [
-              `This image illustrates step ${index + 1} of ${steps.length}, titled "${step.title}", in the guide for ${parentLabel}.${step.imageUrls.length > 1 ? ` The step has ${step.imageUrls.length} images; this is image ${imageIndex + 1}.` : ""}`,
+              `This image illustrates ${step.stepType === "sub" ? "sub-step" : "step"} ${label}, titled "${step.title}", in the guide for ${parentLabel}.${step.imageUrls.length > 1 ? ` The step has ${step.imageUrls.length} images; this is image ${imageIndex + 1}.` : ""}`,
               `Step text: ${truncate(stripHtml(step.contentHtml), 500)}`,
             ].join("\n"),
           });

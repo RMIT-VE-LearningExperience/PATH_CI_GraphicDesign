@@ -7,7 +7,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Typography,
@@ -37,7 +41,11 @@ type SaveData = {
   contentHtml: string;
   imageDataUrls: string[];
   videoUrl: string;
+  stepType: "main" | "sub";
+  parentStepId: string | null;
 };
+
+type MainStepOption = { id: string; title: string };
 
 type Props = {
   open: boolean;
@@ -45,7 +53,13 @@ type Props = {
   onSave: (data: SaveData) => void;
   loading?: boolean;
   mode: "add" | "edit";
-  stepNumber?: number;
+  // Display number, e.g. "3" for a main step or "3.2" for a sub-step
+  stepLabel?: string;
+  // The step being edited (it can't be its own parent)
+  stepId?: string;
+  stepType: "main" | "sub";
+  parentStepId?: string | null;
+  mainSteps: MainStepOption[];
   initialData?: {
     title?: string;
     contentHtml?: string;
@@ -60,7 +74,11 @@ export default function AddEditStepDialog({
   onSave,
   loading,
   mode,
-  stepNumber,
+  stepLabel,
+  stepId,
+  stepType: initialStepType,
+  parentStepId: initialParentStepId,
+  mainSteps,
   initialData,
 }: Props) {
   const [title, setTitle] = useState("");
@@ -70,8 +88,13 @@ export default function AddEditStepDialog({
   const [imageError, setImageError] = useState("");
   const [compressed, setCompressed] = useState(false);
   const [cropIndex, setCropIndex] = useState<number | null>(null);
+  const [stepType, setStepType] = useState<"main" | "sub">("main");
+  const [parentStepId, setParentStepId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const prevOpenRef = useRef(false);
+
+  // Available parents exclude the step itself (a step can't be its own parent)
+  const parentOptions = mainSteps.filter((m) => m.id !== stepId);
 
   useEffect(() => {
     if (!open) {
@@ -87,7 +110,9 @@ export default function AddEditStepDialog({
     setImageError("");
     setCompressed(false);
     setCropIndex(null);
-  }, [open, initialData]);
+    setStepType(initialStepType);
+    setParentStepId(initialParentStepId ?? null);
+  }, [open, initialData, initialStepType, initialParentStepId]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -117,11 +142,14 @@ export default function AddEditStepDialog({
 
   function handleSave() {
     if (!title.trim()) return;
+    if (stepType === "sub" && !parentStepId) return;
     onSave({
       title: title.trim(),
       contentHtml,
       imageDataUrls: images.map((img) => img.dataUrl),
       videoUrl: videoUrl.trim(),
+      stepType,
+      parentStepId: stepType === "sub" ? parentStepId : null,
     });
   }
 
@@ -131,9 +159,46 @@ export default function AddEditStepDialog({
   return (
     <>
       <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: DIALOG_PAPER_SX }}>
-        <DialogTitle sx={DIALOG_TITLE_SX}>Step {stepNumber ?? 1}</DialogTitle>
+        <DialogTitle sx={DIALOG_TITLE_SX}>{stepType === "sub" ? "Sub-step" : "Step"} {stepLabel ?? "1"}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 2 }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <FormControl size="small" sx={{ minWidth: 160 }} disabled={parentOptions.length === 0 && stepType === "main"}>
+                <InputLabel id="step-type-label">Step type</InputLabel>
+                <Select
+                  labelId="step-type-label"
+                  label="Step type"
+                  value={stepType}
+                  onChange={(e) => {
+                    const next = e.target.value as "main" | "sub";
+                    setStepType(next);
+                    if (next === "sub" && !parentStepId) {
+                      setParentStepId(parentOptions[0]?.id ?? null);
+                    }
+                  }}
+                >
+                  <MenuItem value="main">Main step</MenuItem>
+                  <MenuItem value="sub" disabled={parentOptions.length === 0}>Sub-step</MenuItem>
+                </Select>
+              </FormControl>
+
+              {stepType === "sub" && (
+                <FormControl size="small" sx={{ minWidth: 200, flex: 1 }} required>
+                  <InputLabel id="parent-step-label">Under main step</InputLabel>
+                  <Select
+                    labelId="parent-step-label"
+                    label="Under main step"
+                    value={parentStepId ?? ""}
+                    onChange={(e) => setParentStepId(e.target.value || null)}
+                  >
+                    {parentOptions.map((m) => (
+                      <MenuItem key={m.id} value={m.id}>{m.title || "Untitled step"}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+            </Stack>
+
             <TextField
               label="Title"
               value={title}
@@ -300,12 +365,12 @@ export default function AddEditStepDialog({
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={loading || !title.trim()}
+            disabled={loading || !title.trim() || (stepType === "sub" && !parentStepId)}
             sx={PRIMARY_BTN_SX}
           >
             {loading
               ? (mode === "add" ? "Adding..." : "Saving...")
-              : (mode === "add" ? "Add Step" : "Save")}
+              : (mode === "add" ? (stepType === "sub" ? "Add Sub-step" : "Add Step") : "Save")}
           </Button>
         </DialogActions>
       </Dialog>

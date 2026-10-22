@@ -33,6 +33,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { trackEvent } from "./GoogleAnalytics";
 import Footer from "./Footer";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
+import { groupSteps } from "../../lib/step-groups";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -323,9 +324,11 @@ function StepImage({ src, alt, onClick }: { src: string; alt: string; onClick: (
       onClick={onClick}
       aria-label={`Enlarge image${alt ? `: ${alt}` : ""}`}
       sx={{
-        position: "relative", width: "100%", paddingBottom: "60%",
+        // p: 0 must come before paddingBottom: the padding is what gives the box its 60% height
+        m: 0, p: 0, paddingBottom: "60%",
+        position: "relative", width: "100%",
         overflow: "hidden", borderRadius: 1, bgcolor: "#f2f2f2",
-        display: "block", m: 0, p: 0, border: "none",
+        display: "block", border: "none",
         font: "inherit", appearance: "none",
         cursor: "pointer", transition: "all 0.2s ease",
         "&:hover": { boxShadow: colors.cardShadowHover },
@@ -436,6 +439,21 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     if (!state || !atSteps || !parentEntry) return [];
     return state.steps[parentEntry.itemId] ?? [];
   }, [state, atSteps, parentEntry]);
+
+  // Main steps with their sub-steps, flattened back into reading order. Each
+  // entry carries its display label ("3" or "3.1") and the main-step number it
+  // sits under, which keeps the "STEP X OF Y" counter to main steps only.
+  const stepEntries = useMemo(() => {
+    const groups = groupSteps(currentSteps);
+    const entries: { step: Step; label: string; isMain: boolean; mainStepNumber: number }[] = [];
+    groups.forEach((group, mainIdx) => {
+      entries.push({ step: group.main, label: `${mainIdx + 1}`, isMain: true, mainStepNumber: mainIdx + 1 });
+      group.subSteps.forEach((sub, subIdx) => {
+        entries.push({ step: sub, label: `${mainIdx + 1}.${subIdx + 1}`, isMain: false, mainStepNumber: mainIdx + 1 });
+      });
+    });
+    return { entries, totalMainSteps: groups.length };
+  }, [currentSteps]);
 
   // Name of whatever the user is looking at now, for the document title
   const currentPageName = useMemo((): string => {
@@ -631,7 +649,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   // ── Step intersection observer ────────────────────────────────────────
 
   useEffect(() => {
-    if (!atSteps || currentSteps.length === 0) return;
+    if (!atSteps || stepEntries.entries.length === 0) return;
     visibleStepsRef.current.clear();
     lastTrackedStep.current = -1;
 
@@ -661,7 +679,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
     stepRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
-  }, [atSteps, currentSteps]);
+  }, [atSteps, stepEntries]);
 
   // ── Screen-reader step announcements (debounced) ──────────────────────
 
@@ -698,14 +716,14 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   useEffect(() => {
     if (!atSteps || activeStepIndex === lastTrackedStep.current) return;
     lastTrackedStep.current = activeStepIndex;
-    const step = currentSteps[activeStepIndex];
-    if (step) {
-      trackEvent("view_step", { step_number: activeStepIndex + 1, step_title: step.title });
+    const entry = stepEntries.entries[activeStepIndex];
+    if (entry) {
+      trackEvent("view_step", { step_number: entry.label, step_title: entry.step.title });
     }
-    if (currentSteps.length > 0 && activeStepIndex === currentSteps.length - 1) {
-      trackEvent("complete_guide", { total_steps: currentSteps.length });
+    if (stepEntries.entries.length > 0 && activeStepIndex === stepEntries.entries.length - 1) {
+      trackEvent("complete_guide", { total_steps: stepEntries.totalMainSteps });
     }
-  }, [activeStepIndex, atSteps, currentSteps]);
+  }, [activeStepIndex, atSteps, stepEntries]);
 
   // ── Navigation ────────────────────────────────────────────────────────
 
@@ -1094,16 +1112,16 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   variant="body1"
                   sx={{ fontSize: { xs: "0.9rem", sm: "1rem" }, fontWeight: 600, color: colors.text, letterSpacing: "0.05em" }}
                 >
-                  STEP {currentSteps.length === 0 ? 0 : activeStepIndex + 1} OF {currentSteps.length}
+                  STEP {stepEntries.entries.length === 0 ? 0 : (stepEntries.entries[activeStepIndex]?.mainStepNumber ?? 1)} OF {stepEntries.totalMainSteps}
                 </Typography>
                 {/* Debounced screen-reader announcement of the visual counter above */}
                 <Box component="p" role="status" sx={srOnlySx}>
-                  {currentSteps.length > 0 ? `Step ${announcedStepIndex + 1} of ${currentSteps.length}` : ""}
+                  {stepEntries.entries.length > 0 ? `Step ${stepEntries.entries[announcedStepIndex]?.mainStepNumber ?? 1} of ${stepEntries.totalMainSteps}` : ""}
                 </Box>
               </Box>
 
-              <Stack spacing={{ xs: 3, sm: 4 }} sx={{ pb: { xs: 6, sm: 8 } }}>
-                {currentSteps.map((step, index) => {
+              <Box sx={{ pb: { xs: 6, sm: 8 } }}>
+                {stepEntries.entries.map(({ step, label, isMain }, index) => {
                   const embedUrl = step.videoUrl ? getVideoEmbedUrl(step.videoUrl) : null;
                   const isDirectVideo = /\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl ?? "");
                   return (
@@ -1111,21 +1129,27 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                       key={step.id}
                       ref={(el) => { stepRefs.current[index] = el; }}
                       data-step-index={index}
-                      sx={{ borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden" }}
+                      sx={{
+                        borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden",
+                        // A sub-step sits close under its main step and is indented
+                        mt: index === 0 ? 0 : isMain ? { xs: 3, sm: 4 } : 1,
+                        ml: isMain ? 0 : { xs: 2, sm: 4 },
+                      }}
                     >
-                      <CardContent sx={{ p: { xs: 2.5, sm: 3.5 } }}>
+                      <CardContent sx={{ p: isMain ? { xs: 2.5, sm: 3.5 } : { xs: 2, sm: 2.5 } }}>
                         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: { xs: 2, sm: 2.5 } }}>
                           <Box
                             sx={{
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              width: 40, height: 40, bgcolor: colors.darkBg, color: colors.lightBg,
-                              fontWeight: 700, borderRadius: 1, fontSize: "1.1rem", flexShrink: 0,
+                              minWidth: isMain ? 40 : 36, height: isMain ? 40 : 32, px: isMain ? 0 : 0.75,
+                              bgcolor: colors.darkBg, color: colors.lightBg,
+                              fontWeight: 700, borderRadius: 1, fontSize: isMain ? "1.1rem" : "0.95rem", flexShrink: 0,
                             }}
                           >
-                            {index + 1}
+                            {label}
                           </Box>
                           {step.title && (
-                            <Typography variant="h6" component="h2" sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 600, color: colors.primary }}>
+                            <Typography variant="h6" component={isMain ? "h2" : "h3"} sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: isMain ? 600 : 500, color: colors.primary }}>
                               {step.title}
                             </Typography>
                           )}
@@ -1198,7 +1222,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                     </Card>
                   );
                 })}
-              </Stack>
+              </Box>
             </Box>
           </Container>
         </Box>

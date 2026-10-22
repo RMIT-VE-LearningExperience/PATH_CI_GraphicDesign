@@ -13,7 +13,8 @@ import {
   updateStep,
   deleteStep,
   reorderStep,
-  setStepOrder,
+  reorderMainStep,
+  reorderSubStep,
   restoreDeletedItem,
   permanentlyDeleteItem,
   updateHomepageSettings,
@@ -35,11 +36,12 @@ type ActionPayload =
   | { action: "linkItem"; parentLevelId: string; parentItemId: string; childLevelId: string; childItemId: string }
   | { action: "unlinkItem"; parentLevelId: string; parentItemId: string; childItemId: string }
   | { action: "updateRelationship"; parentLevelId: string; parentItemId: string; childItemId: string; published: boolean }
-  | { action: "addStep"; parentItemId: string; title: string; contentHtml: string; imageDataUrls: string[]; videoUrl?: string }
-  | { action: "updateStep"; parentItemId: string; stepId: string; title?: string; contentHtml?: string; imageDataUrls?: string[]; videoUrl?: string }
+  | { action: "addStep"; parentItemId: string; title: string; contentHtml: string; imageDataUrls: string[]; videoUrl?: string; stepType: "main" | "sub"; parentStepId: string | null }
+  | { action: "updateStep"; parentItemId: string; stepId: string; title?: string; contentHtml?: string; imageDataUrls?: string[]; videoUrl?: string; stepType?: "main" | "sub"; parentStepId?: string | null }
   | { action: "deleteStep"; parentItemId: string; stepId: string }
   | { action: "reorderStep"; parentItemId: string; stepId: string; direction: "up" | "down" }
-  | { action: "setStepOrder"; parentItemId: string; stepId: string; newIndex: number }
+  | { action: "reorderMainStep"; parentItemId: string; stepId: string; newBlockIndex: number }
+  | { action: "reorderSubStep"; parentItemId: string; stepId: string; newParentStepId: string; newIndexWithinParent: number }
   | { action: "restoreDeletedItem"; deletedItemId: string }
   | { action: "permanentlyDeleteItem"; deletedItemId: string }
   | { action: "removeInvalidChildren"; parentLevelId: string; parentItemId: string }
@@ -79,7 +81,7 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
       return updateRelationship(payload.parentLevelId, payload.parentItemId, payload.childItemId, payload.published);
 
     case "addStep":
-      return addStep(payload.parentItemId, payload.title, payload.contentHtml, payload.imageDataUrls, payload.videoUrl, modifiedBy);
+      return addStep(payload.parentItemId, payload.title, payload.contentHtml, payload.imageDataUrls, payload.videoUrl, payload.stepType, payload.parentStepId, modifiedBy);
 
     case "updateStep":
       return updateStep(
@@ -90,6 +92,8 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
           contentHtml: payload.contentHtml,
           imageDataUrls: payload.imageDataUrls,
           videoUrl: payload.videoUrl,
+          stepType: payload.stepType,
+          parentStepId: payload.parentStepId,
         },
         modifiedBy,
       );
@@ -100,8 +104,11 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
     case "reorderStep":
       return reorderStep(payload.parentItemId, payload.stepId, payload.direction);
 
-    case "setStepOrder":
-      return setStepOrder(payload.parentItemId, payload.stepId, payload.newIndex);
+    case "reorderMainStep":
+      return reorderMainStep(payload.parentItemId, payload.stepId, payload.newBlockIndex);
+
+    case "reorderSubStep":
+      return reorderSubStep(payload.parentItemId, payload.stepId, payload.newParentStepId, payload.newIndexWithinParent);
 
     case "restoreDeletedItem":
       return restoreDeletedItem(payload.deletedItemId);

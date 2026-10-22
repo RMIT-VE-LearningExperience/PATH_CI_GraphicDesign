@@ -47,16 +47,18 @@ import {
   Save as SaveIcon,
   SettingsEthernet as SettingsEthernetIcon,
 } from "@mui/icons-material";
-import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
+import { DragDropContext, Droppable, Draggable, type DraggableProvidedDragHandleProps, type DropResult } from "@hello-pangea/dnd";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-provider";
 import { getAuthInstance } from "../../lib/firebase-client";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
+import { groupSteps } from "../../lib/step-groups";
 
 import Sidebar from "./Sidebar";
 import AddEditItemDialog from "./dialogs/AddEditItemDialog";
 import AddEditStepDialog from "./dialogs/AddEditStepDialog";
+import CannotConvertToSubStepDialog from "./dialogs/CannotConvertToSubStepDialog";
 import SearchLinkDialog from "./dialogs/SearchLinkDialog";
 import ConfirmDeleteDialog from "./dialogs/ConfirmDeleteDialog";
 import InfoDialog from "./dialogs/InfoDialog";
@@ -241,7 +243,10 @@ export default function AdminDashboard() {
     mode: "add" | "edit";
     parentItemId: string;
     step?: Step;
+    stepType: "main" | "sub";
+    defaultParentStepId?: string | null;
   } | null>(null);
+  const [blockedConversion, setBlockedConversion] = useState<{ stepTitle: string; subStepTitles: string[] } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [infoOpen, setInfoOpen] = useState<{ item: Item | Step; isStep?: boolean } | null>(null);
   const [copyLinkTarget, setCopyLinkTarget] = useState<{ itemName: string; url: string } | null>(null);
@@ -353,6 +358,8 @@ export default function AdminDashboard() {
     if (!state || !atSteps || !parentEntry) return [];
     return state.steps[parentEntry.itemId] ?? [];
   }, [state, atSteps, parentEntry]);
+
+  const stepGroups = useMemo(() => groupSteps(currentSteps), [currentSteps]);
 
   const globalListItems = useMemo((): Item[] => {
     if (!state || !globalListLevelId) return [];
@@ -604,31 +611,58 @@ export default function AdminDashboard() {
 
   // ── Step CRUD ─────────────────────────────────────────────────────────
 
-  async function handleSaveStep(data: { title: string; contentHtml: string; imageDataUrls: string[]; videoUrl: string }) {
+  async function handleSaveStep(data: {
+    title: string; contentHtml: string; imageDataUrls: string[]; videoUrl: string;
+    stepType: "main" | "sub"; parentStepId: string | null;
+  }) {
     if (!stepDialog) return;
     const { mode, parentItemId, step } = stepDialog;
     if (mode === "edit" && step) {
+      if (data.stepType === "sub") {
+        const ownSubSteps = (state?.steps[parentItemId] ?? []).filter(
+          (s) => s.stepType === "sub" && s.parentStepId === step.id,
+        );
+        if (ownSubSteps.length > 0) {
+          setBlockedConversion({ stepTitle: step.title, subStepTitles: ownSubSteps.map((s) => s.title) });
+          return;
+        }
+      }
       const ns = await dispatch("updateStep", {
         parentItemId, stepId: step.id, title: data.title,
         contentHtml: data.contentHtml, imageDataUrls: data.imageDataUrls, videoUrl: data.videoUrl,
+        stepType: data.stepType, parentStepId: data.parentStepId,
       });
       if (ns) { setStepDialog(null); showAlert("Saved"); }
     } else {
       const ns = await dispatch("addStep", {
         parentItemId, title: data.title,
         contentHtml: data.contentHtml, imageDataUrls: data.imageDataUrls, videoUrl: data.videoUrl,
+        stepType: data.stepType, parentStepId: data.parentStepId,
       });
-      if (ns) { setStepDialog(null); showAlert("Step added"); }
+      if (ns) { setStepDialog(null); showAlert(data.stepType === "sub" ? "Sub-step added" : "Step added"); }
     }
   }
 
   async function handleDragEnd(result: DropResult) {
     if (!result.destination || !parentEntry) return;
-    if (result.source.index === result.destination.index) return;
-    await dispatch("setStepOrder", {
+    if (result.destination.droppableId === result.source.droppableId
+      && result.destination.index === result.source.index) return;
+
+    if (result.type === "SUB") {
+      const newParentStepId = result.destination.droppableId.replace(/^sub-/, "");
+      await dispatch("reorderSubStep", {
+        parentItemId: parentEntry.itemId,
+        stepId: result.draggableId,
+        newParentStepId,
+        newIndexWithinParent: result.destination.index,
+      });
+      return;
+    }
+
+    await dispatch("reorderMainStep", {
       parentItemId: parentEntry.itemId,
       stepId: result.draggableId,
-      newIndex: result.destination.index,
+      newBlockIndex: result.destination.index,
     });
   }
 
@@ -969,6 +1003,116 @@ export default function AdminDashboard() {
     );
   }
 
+  function renderStepRow(
+    step: Step,
+    label: string,
+    dragHandleProps: DraggableProvidedDragHandleProps | null | undefined,
+    isDragging: boolean,
+  ) {
+    if (!parentEntry) return null;
+    const isSub = step.stepType === "sub";
+    return (
+        <Paper
+          elevation={1}
+          sx={{
+            p: 3, borderRadius: 1, border: "1px solid #E5E1D7",
+            transition: isDragging ? "none" : "box-shadow 200ms ease",
+            boxShadow: isDragging ? "0 8px 24px rgba(0,0,0,0.15)" : undefined,
+          }}
+        >
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, flex: 1 }}>
+              <Box
+                {...dragHandleProps}
+                aria-label={`Reorder ${isSub ? "sub-step" : "step"} ${label}: ${step.title}. Press space to pick up, arrow keys to move.`}
+                sx={{ display: "flex", alignItems: "center", pt: 0.5, cursor: "grab", color: "text.disabled" }}
+              >
+                <DragIndicatorIcon fontSize="small" />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
+                  <Typography variant="h6" component="h3" fontWeight={700} sx={{ color: "#45443F" }}>
+                    {isSub ? "Sub-step" : "Step"} {label}: {step.title}
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setExpandedStepId(expandedStepId === step.id ? null : step.id)}
+                    aria-expanded={expandedStepId === step.id}
+                    aria-controls={`step-details-${step.id}`}
+                    sx={{
+                      color: "#000054", borderColor: "#000054", fontWeight: 600,
+                      textTransform: "none",
+                      "&:hover": { bgcolor: "rgba(0,0,84,0.1)", borderColor: "#00003f" },
+                    }}
+                  >
+                    {expandedStepId === step.id ? "Collapse" : "Expand"}
+                  </Button>
+                </Box>
+
+                <Collapse in={expandedStepId === step.id} id={`step-details-${step.id}`}>
+                  <Box sx={{ mt: 2, mb: 1 }}>
+                    {step.contentHtml && (
+                      <Box
+                        sx={{
+                          p: 2, bgcolor: "action.hover", borderRadius: 1, mb: 2,
+                          "& p": { mb: 1 }, "& ul": { pl: 2, mb: 1 },
+                        }}
+                        dangerouslySetInnerHTML={{ __html: step.contentHtml }}
+                      />
+                    )}
+                    {step.imageUrls.length > 0 && (
+                      <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
+                        {step.imageUrls.map((url, i) => (
+                          <Box
+                            key={`${url}-${i}`}
+                            component="img"
+                            src={url}
+                            alt={step.imageAlts[i] ?? `Image ${i + 1} for step ${label}`}
+                            sx={{ width: "100%", maxWidth: step.imageUrls.length > 1 ? 200 : 400, maxHeight: 300, objectFit: "cover", borderRadius: 1 }}
+                          />
+                        ))}
+                      </Stack>
+                    )}
+                    {step.videoUrl && getVideoEmbedUrl(step.videoUrl) && (
+                      <Box sx={{ mt: 1 }}>
+                        {/\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl) ? (
+                          <Box component="video" controls src={step.videoUrl} sx={{ width: "100%", borderRadius: 1 }} />
+                        ) : (
+                          <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
+                            <Box
+                              component="iframe"
+                              src={getVideoEmbedUrl(step.videoUrl)!}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              title={step.title || "Step video"}
+                              sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+                  </Box>
+                </Collapse>
+              </Box>
+            </Box>
+            <IconButton
+              size="small"
+              aria-label={`More actions for ${isSub ? "sub-step" : "step"} ${label}: ${step.title}`}
+              aria-haspopup="menu"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuTarget({ anchorEl: e.currentTarget, type: "step", id: step.id, extra: parentEntry.itemId, step });
+              }}
+              sx={{ ml: 1 }}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </Paper>
+    );
+  }
+
   function renderStepsView() {
     if (!state || !parentEntry) return null;
 
@@ -980,7 +1124,7 @@ export default function AdminDashboard() {
           </Typography>
           <Button
             variant="contained"
-            onClick={() => setStepDialog({ mode: "add", parentItemId: parentEntry.itemId })}
+            onClick={() => setStepDialog({ mode: "add", parentItemId: parentEntry.itemId, stepType: "main" })}
             sx={{ bgcolor: "#000054", color: "#fff", fontWeight: 600, textTransform: "none", "&:hover": { bgcolor: "#00003f" } }}
           >
             + Add Step
@@ -991,120 +1135,58 @@ export default function AdminDashboard() {
           <Typography color="text.secondary">No steps added yet.</Typography>
         ) : (
           <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="steps">
-              {(droppableProvided) => (
+            <Droppable droppableId="main-steps" type="MAIN">
+              {(mainProvided) => (
                 <Box
-                  ref={droppableProvided.innerRef}
-                  {...droppableProvided.droppableProps}
+                  ref={mainProvided.innerRef}
+                  {...mainProvided.droppableProps}
                   sx={{ display: "flex", flexDirection: "column", gap: 2 }}
                 >
-                  {currentSteps.map((step, index) => (
-                    <Draggable key={step.id} draggableId={step.id} index={index}>
-                      {(draggableProvided, snapshot) => (
-                        <Paper
-                          ref={draggableProvided.innerRef}
-                          {...draggableProvided.draggableProps}
-                          elevation={1}
-                          sx={{
-                            p: 3, borderRadius: 1, border: "1px solid #E5E1D7",
-                            transition: snapshot.isDragging ? "none" : "box-shadow 200ms ease",
-                            boxShadow: snapshot.isDragging ? "0 8px 24px rgba(0,0,0,0.15)" : undefined,
-                          }}
-                        >
-                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, flex: 1 }}>
-                              <Box
-                                {...draggableProvided.dragHandleProps}
-                                aria-label={`Reorder step ${index + 1}: ${step.title}. Press space to pick up, arrow keys to move.`}
-                                sx={{ display: "flex", alignItems: "center", pt: 0.5, cursor: "grab", color: "text.disabled" }}
-                              >
-                                <DragIndicatorIcon fontSize="small" />
-                              </Box>
-                              <Box sx={{ flex: 1 }}>
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-                                  <Typography variant="h6" component="h3" fontWeight={700} sx={{ color: "#45443F" }}>
-                                    Step {index + 1}: {step.title}
-                                  </Typography>
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={() => setExpandedStepId(expandedStepId === step.id ? null : step.id)}
-                                    aria-expanded={expandedStepId === step.id}
-                                    aria-controls={`step-details-${step.id}`}
-                                    sx={{
-                                      color: "#000054", borderColor: "#000054", fontWeight: 600,
-                                      textTransform: "none",
-                                      "&:hover": { bgcolor: "rgba(0,0,84,0.1)", borderColor: "#00003f" },
-                                    }}
-                                  >
-                                    {expandedStepId === step.id ? "Collapse" : "Expand"}
-                                  </Button>
-                                </Box>
+                  {stepGroups.map((group, mainIndex) => (
+                    <Draggable key={group.main.id} draggableId={group.main.id} index={mainIndex}>
+                      {(mainDraggableProvided, mainSnapshot) => (
+                        <Box ref={mainDraggableProvided.innerRef} {...mainDraggableProvided.draggableProps}>
+                          {renderStepRow(group.main, `${mainIndex + 1}`, mainDraggableProvided.dragHandleProps, mainSnapshot.isDragging)}
 
-                                <Collapse in={expandedStepId === step.id} id={`step-details-${step.id}`}>
-                                  <Box sx={{ mt: 2, mb: 1 }}>
-                                    {step.contentHtml && (
-                                      <Box
-                                        sx={{
-                                          p: 2, bgcolor: "action.hover", borderRadius: 1, mb: 2,
-                                          "& p": { mb: 1 }, "& ul": { pl: 2, mb: 1 },
-                                        }}
-                                        dangerouslySetInnerHTML={{ __html: step.contentHtml }}
-                                      />
-                                    )}
-                                    {step.imageUrls.length > 0 && (
-                                      <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
-                                        {step.imageUrls.map((url, i) => (
-                                          <Box
-                                            key={`${url}-${i}`}
-                                            component="img"
-                                            src={url}
-                                            alt={step.imageAlts[i] ?? `Image ${i + 1} for step ${index + 1}`}
-                                            sx={{ width: "100%", maxWidth: step.imageUrls.length > 1 ? 200 : 400, maxHeight: 300, objectFit: "cover", borderRadius: 1 }}
-                                          />
-                                        ))}
-                                      </Stack>
-                                    )}
-                                    {step.videoUrl && getVideoEmbedUrl(step.videoUrl) && (
-                                      <Box sx={{ mt: 1 }}>
-                                        {/\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl) ? (
-                                          <Box component="video" controls src={step.videoUrl} sx={{ width: "100%", borderRadius: 1 }} />
-                                        ) : (
-                                          <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
-                                            <Box
-                                              component="iframe"
-                                              src={getVideoEmbedUrl(step.videoUrl)!}
-                                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                              allowFullScreen
-                                              title={step.title || "Step video"}
-                                              sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                                            />
-                                          </Box>
-                                        )}
+                          <Droppable droppableId={`sub-${group.main.id}`} type="SUB">
+                            {(subProvided) => (
+                              <Box
+                                ref={subProvided.innerRef}
+                                {...subProvided.droppableProps}
+                                sx={{
+                                  display: "flex", flexDirection: "column", gap: 1.5,
+                                  ml: 4, mt: 1.5, pl: 2, borderLeft: "2px solid #E5E1D7",
+                                }}
+                              >
+                                {group.subSteps.map((sub, subIndex) => (
+                                  <Draggable key={sub.id} draggableId={sub.id} index={subIndex}>
+                                    {(subDraggableProvided, subSnapshot) => (
+                                      <Box ref={subDraggableProvided.innerRef} {...subDraggableProvided.draggableProps}>
+                                        {renderStepRow(sub, `${mainIndex + 1}.${subIndex + 1}`, subDraggableProvided.dragHandleProps, subSnapshot.isDragging)}
                                       </Box>
                                     )}
-                                  </Box>
-                                </Collapse>
+                                  </Draggable>
+                                ))}
+                                {subProvided.placeholder}
+                                <Button
+                                  size="small"
+                                  onClick={() => setStepDialog({
+                                    mode: "add", parentItemId: parentEntry.itemId,
+                                    stepType: "sub", defaultParentStepId: group.main.id,
+                                  })}
+                                  aria-label={`Add a sub-step under step ${mainIndex + 1}: ${group.main.title}`}
+                                  sx={{ alignSelf: "flex-start", color: "#000054", textTransform: "none", fontWeight: 600 }}
+                                >
+                                  + Add Sub-step
+                                </Button>
                               </Box>
-                            </Box>
-                            <IconButton
-                              size="small"
-                              aria-label={`More actions for step ${index + 1}: ${step.title}`}
-                              aria-haspopup="menu"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuTarget({ anchorEl: e.currentTarget, type: "step", id: step.id, extra: parentEntry.itemId, step });
-                              }}
-                              sx={{ ml: 1 }}
-                            >
-                              <MoreVertIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        </Paper>
+                            )}
+                          </Droppable>
+                        </Box>
                       )}
                     </Draggable>
                   ))}
-                  {droppableProvided.placeholder}
+                  {mainProvided.placeholder}
                 </Box>
               )}
             </Droppable>
@@ -1419,7 +1501,7 @@ export default function AdminDashboard() {
     function onEdit() {
       handleClose();
       if (type === "item" && item && extra) setItemDialog({ mode: "edit", levelId: extra, item, isGlobalList: !!globalListLevelId });
-      else if (type === "step" && step && extra) setStepDialog({ mode: "edit", parentItemId: extra, step });
+      else if (type === "step" && step && extra) setStepDialog({ mode: "edit", parentItemId: extra, step, stepType: step.stepType, defaultParentStepId: step.parentStepId });
     }
 
     function onInfo() {
@@ -1489,11 +1571,27 @@ export default function AdminDashboard() {
   // ── Main render ───────────────────────────────────────────────────────
 
   const stepDialogSteps = state?.steps[stepDialog?.parentItemId ?? ""] ?? [];
-  const stepDialogNumber = stepDialog
-    ? stepDialog.mode === "add"
-      ? stepDialogSteps.length + 1
-      : (stepDialogSteps.findIndex((s) => s.id === stepDialog.step?.id) + 1) || 1
-    : 1;
+  const stepDialogGroups = groupSteps(stepDialogSteps);
+  const stepDialogMainOptions = stepDialogGroups.map((g) => ({ id: g.main.id, title: g.main.title }));
+  let stepDialogLabel = "1";
+  if (stepDialog?.mode === "add") {
+    if (stepDialog.stepType === "sub" && stepDialog.defaultParentStepId) {
+      const gi = stepDialogGroups.findIndex((g) => g.main.id === stepDialog.defaultParentStepId);
+      stepDialogLabel = gi >= 0 ? `${gi + 1}.${stepDialogGroups[gi].subSteps.length + 1}` : "1";
+    } else {
+      stepDialogLabel = `${stepDialogGroups.length + 1}`;
+    }
+  } else if (stepDialog?.mode === "edit" && stepDialog.step) {
+    const mainIdx = stepDialogGroups.findIndex((g) => g.main.id === stepDialog.step!.id);
+    if (mainIdx >= 0) {
+      stepDialogLabel = `${mainIdx + 1}`;
+    } else {
+      for (let i = 0; i < stepDialogGroups.length; i++) {
+        const subIdx = stepDialogGroups[i].subSteps.findIndex((x) => x.id === stepDialog.step!.id);
+        if (subIdx >= 0) { stepDialogLabel = `${i + 1}.${subIdx + 1}`; break; }
+      }
+    }
+  }
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -1660,13 +1758,26 @@ export default function AdminDashboard() {
         onSave={(d) => void handleSaveStep(d)}
         loading={actionLoading}
         mode={stepDialog?.mode ?? "add"}
-        stepNumber={stepDialogNumber}
+        stepLabel={stepDialogLabel}
+        stepId={stepDialog?.step?.id}
+        stepType={stepDialog?.stepType ?? "main"}
+        parentStepId={stepDialog?.defaultParentStepId ?? null}
+        mainSteps={stepDialogMainOptions}
         initialData={
           stepDialog?.step
             ? { title: stepDialog.step.title, contentHtml: stepDialog.step.contentHtml, imageUrls: stepDialog.step.imageUrls, videoUrl: stepDialog.step.videoUrl }
             : undefined
         }
       />
+
+      {blockedConversion && (
+        <CannotConvertToSubStepDialog
+          open
+          onClose={() => setBlockedConversion(null)}
+          stepTitle={blockedConversion.stepTitle}
+          subStepTitles={blockedConversion.subStepTitles}
+        />
+      )}
 
       <ConfirmDeleteDialog
         open={!!deleteTarget}
