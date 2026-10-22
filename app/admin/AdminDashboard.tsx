@@ -6,6 +6,7 @@ import {
   Box,
   Breadcrumbs,
   Button,
+  ButtonBase,
   Chip,
   CircularProgress,
   Collapse,
@@ -22,7 +23,6 @@ import {
   Select,
   Stack,
   Switch,
-  Tab,
   Table,
   TableBody,
   TableCell,
@@ -30,15 +30,16 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import {
   Check as CheckIcon,
+  Close as CloseIcon,
   ContentCopy as ContentCopyIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
   DragIndicator as DragIndicatorIcon,
   Equalizer as EqualizerIcon,
   Image as ImageIcon,
@@ -55,13 +56,12 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-provider";
 import { getAuthInstance } from "../../lib/firebase-client";
 import type { Item, Level, RelationshipEntry, Step, TutorialState } from "../../lib/tutorial-store";
-import { DEFAULT_STEP_TAB_LABELS, STEP_SECTIONS, groupSteps, type StepSection } from "../../lib/step-groups";
+import { DEFAULT_STEP_TAB_LABELS, STEP_SECTIONS, STEP_TAB_LABEL_MAX_LENGTH, groupSteps, type StepSection } from "../../lib/step-groups";
 
 import Sidebar from "./Sidebar";
 import AddEditItemDialog from "./dialogs/AddEditItemDialog";
 import AddEditStepDialog from "./dialogs/AddEditStepDialog";
 import CannotConvertToSubStepDialog from "./dialogs/CannotConvertToSubStepDialog";
-import StepTabsDialog from "./dialogs/StepTabsDialog";
 import SearchLinkDialog from "./dialogs/SearchLinkDialog";
 import ConfirmDeleteDialog from "./dialogs/ConfirmDeleteDialog";
 import InfoDialog from "./dialogs/InfoDialog";
@@ -251,7 +251,9 @@ export default function AdminDashboard() {
     defaultParentStepId?: string | null;
   } | null>(null);
   const [stepTab, setStepTab] = useState<StepSection>("steps");
-  const [tabsDialogOpen, setTabsDialogOpen] = useState(false);
+  // Renaming a tab in place: which tab is being renamed, and the name typed so far
+  const [editingTab, setEditingTab] = useState<StepSection | null>(null);
+  const [tabDraft, setTabDraft] = useState("");
   const [blockedConversion, setBlockedConversion] = useState<{ stepTitle: string; subStepTitles: string[] } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [infoOpen, setInfoOpen] = useState<{ item: Item | Step; isStep?: boolean } | null>(null);
@@ -665,9 +667,23 @@ export default function AdminDashboard() {
     }
   }
 
-  async function handleSaveTabLabels(labels: Record<StepSection, string>) {
-    const ns = await dispatch("updateAppSettings", { settings: { stepTabs: labels } });
-    if (ns) { setTabsDialogOpen(false); showAlert("Tab names saved"); }
+  function startRenamingTab(section: StepSection) {
+    setEditingTab(section);
+    setTabDraft(tabLabels[section]);
+  }
+
+  function cancelRenamingTab() {
+    setEditingTab(null);
+  }
+
+  async function saveTabName() {
+    if (!editingTab) return;
+    const name = tabDraft.trim();
+    if (!name) return;
+    if (name === tabLabels[editingTab]) { setEditingTab(null); return; }
+    // Only this tab's name is sent; the others keep their saved names
+    const ns = await dispatch("updateAppSettings", { settings: { stepTabs: { [editingTab]: name } } });
+    if (ns) { setEditingTab(null); showAlert("Tab name saved"); }
   }
 
   async function handleDragEnd(result: DropResult) {
@@ -1087,7 +1103,7 @@ export default function AdminDashboard() {
                       <Box
                         sx={{
                           p: 2, bgcolor: "action.hover", borderRadius: 1, mb: 2,
-                          "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 },
+                          "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 }, "& blockquote": { m: 0, ml: 5, p: 0, border: "none" },
                         }}
                         dangerouslySetInnerHTML={{ __html: step.contentHtml }}
                       />
@@ -1149,40 +1165,89 @@ export default function AdminDashboard() {
 
     return (
       <Box>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 2 }}>
-          <Typography variant="h5" component="h2" sx={{ color: "#45443F", fontWeight: 700 }}>
-            Steps: {parentEntry.itemName}
-          </Typography>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => setTabsDialogOpen(true)}
-            sx={{ color: "#000054", borderColor: "#000054", fontWeight: 600, textTransform: "none" }}
-          >
-            Edit tab names
-          </Button>
+        <Typography variant="h5" component="h2" sx={{ color: "#45443F", fontWeight: 700, mb: 2 }}>
+          Steps: {parentEntry.itemName}
+        </Typography>
+
+        {/* Tabs. The pencil renames a tab in place; the name applies to every product in the app. */}
+        {/* A group of toggle buttons rather than a tab list: each tab has a pencil button beside it, which a tab list does not allow */}
+        <Box
+          role="group"
+          aria-label="Sections of this product"
+          sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, mb: 2, borderBottom: 1, borderColor: "divider" }}
+        >
+          {STEP_SECTIONS.map((section) => {
+            const selected = stepTab === section;
+            if (editingTab === section) {
+              return (
+                <Box key={section} sx={{ display: "flex", alignItems: "center", gap: 0.5, py: 0.75 }}>
+                  <TextField
+                    size="small"
+                    autoFocus
+                    value={tabDraft}
+                    onChange={(e) => setTabDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); void saveTabName(); }
+                      else if (e.key === "Escape") { e.stopPropagation(); cancelRenamingTab(); }
+                    }}
+                    inputProps={{ maxLength: STEP_TAB_LABEL_MAX_LENGTH, "aria-label": `New name for the ${tabLabels[section]} tab. Press Enter to save or Escape to cancel.` }}
+                    error={!tabDraft.trim()}
+                    sx={{ width: 200 }}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => void saveTabName()}
+                    disabled={!tabDraft.trim() || actionLoading}
+                    aria-label="Save tab name"
+                    title="Save"
+                    sx={{ color: "#000054" }}
+                  >
+                    <CheckIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={cancelRenamingTab}
+                    aria-label="Cancel renaming"
+                    title="Cancel"
+                    sx={{ color: "#45443F" }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              );
+            }
+            return (
+              <Box
+                key={section}
+                sx={{ display: "flex", alignItems: "center", mb: "-1px", borderBottom: "2px solid", borderColor: selected ? "#000054" : "transparent" }}
+              >
+                <ButtonBase
+                  id={`step-tab-${section}`}
+                  aria-pressed={selected}
+                  onClick={() => setStepTab(section)}
+                  sx={{
+                    pl: 2, pr: 0.5, py: 1.5, fontFamily: "inherit", fontSize: "0.875rem", fontWeight: 600,
+                    color: selected ? "#000054" : "#45443F",
+                    "&:focus-visible": { outline: "3px solid #000054", outlineOffset: -3 },
+                  }}
+                >
+                  {tabLabels[section]} ({stepsFor(section).filter((x) => x.stepType === "main").length})
+                </ButtonBase>
+                <IconButton
+                  size="small"
+                  onClick={() => startRenamingTab(section)}
+                  aria-label={`Rename the ${tabLabels[section]} tab`}
+                  title="Rename this tab (applies to every product)"
+                  sx={{ color: "#45443F", mr: 0.5 }}
+                >
+                  <EditIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Box>
+            );
+          })}
         </Box>
 
-        <Tabs
-          value={stepTab}
-          onChange={(_, value: StepSection) => setStepTab(value)}
-          variant="scrollable"
-          scrollButtons="auto"
-          aria-label="Sections of this product"
-          sx={{ mb: 2, borderBottom: 1, borderColor: "divider", "& .MuiTab-root": { textTransform: "none", fontWeight: 600, color: "#45443F" }, "& .Mui-selected": { color: "#000054" }, "& .MuiTabs-indicator": { bgcolor: "#000054" } }}
-        >
-          {STEP_SECTIONS.map((section) => (
-            <Tab
-              key={section}
-              value={section}
-              id={`step-tab-${section}`}
-              aria-controls={`step-tabpanel-${section}`}
-              label={`${tabLabels[section]} (${stepsFor(section).filter((x) => x.stepType === "main").length})`}
-            />
-          ))}
-        </Tabs>
-
-        <Box role="tabpanel" id={`step-tabpanel-${stepTab}`} aria-labelledby={`step-tab-${stepTab}`}>
+        <Box role="region" id={`step-tabpanel-${stepTab}`} aria-labelledby={`step-tab-${stepTab}`}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 3 }}>
           <Typography variant="body2" color="text.secondary">
             {stepTab === "overview"
@@ -1851,14 +1916,6 @@ export default function AdminDashboard() {
           subStepTitles={blockedConversion.subStepTitles}
         />
       )}
-
-      <StepTabsDialog
-        open={tabsDialogOpen}
-        onClose={() => setTabsDialogOpen(false)}
-        labels={tabLabels}
-        loading={actionLoading}
-        onSave={(labels) => void handleSaveTabLabels(labels)}
-      />
 
       <ConfirmDeleteDialog
         open={!!deleteTarget}

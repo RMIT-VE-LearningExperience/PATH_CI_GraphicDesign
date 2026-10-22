@@ -104,7 +104,10 @@ function getVideoEmbedUrl(url: string): string | null {
 
 function sanitizeHtml(html: string): string {
   return html
-    .replace(/<(?!\/?(p|br|ul|ol|li|b|strong|i|em|h3|a)(\s+[^>]*)?>)[^>]*>/gi, "")
+    // blockquote carries the editor's indent buttons
+    .replace(/<(?!\/?(p|br|ul|ol|li|b|strong|i|em|h3|a|blockquote)(\s+[^>]*)?>)[^>]*>/gi, "")
+    // The editor adds inline styles (e.g. the indent margin); the page styles blockquote itself
+    .replace(/<blockquote\s+[^>]*>/gi, "<blockquote>")
     .replace(/<a\s+[^>]*href=(\"|')(.*?)\1[^>]*>/gi, (_m, _q, href: string) => {
       const safe = /^(https?:\/\/|mailto:)/i.test(href) ? href : "#";
       return `<a href="${safe}" target="_blank" rel="noreferrer">`;
@@ -618,6 +621,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           fontSize: { xs: "0.95rem", sm: "1rem" }, color: colors.text, lineHeight: 1.6,
           mb: { xs: 2, sm: 3 }, wordBreak: "break-word",
           "& p": { mb: 1 }, "& ul, & ol": { pl: 2, mb: 1 }, "& li": { mb: 0.5 },
+          "& blockquote": { m: 0, ml: { xs: 2.5, sm: 5 }, p: 0, border: "none" },
           "& strong, & b": { fontWeight: 700 }, "& em, & i": { fontStyle: "italic" },
           "& a": { color: colors.primary, textDecoration: "underline", "&:hover": { opacity: 0.8 } },
         }}
@@ -685,7 +689,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
         onClick={() => setSafetyOpen(true)}
         aria-label={`Open ${tabLabels.safety}`}
         aria-haspopup="dialog"
-        sx={{ width: 44, height: 44, color: "#B3261E", border: "2px solid #B3261E", "&:hover": { bgcolor: "rgba(179,38,30,0.08)" } }}
+        sx={{ width: 44, height: 44, color: "#B3261E", "&:hover": { bgcolor: "rgba(179,38,30,0.08)" }, "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: 2 } }}
       >
         <ErrorOutlineIcon />
       </IconButton>
@@ -1321,7 +1325,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     }
 
     return (
-      <Box sx={{ minHeight: "100vh", bgcolor: colors.lightBg }}>
+      <Box sx={{ minHeight: "100vh", bgcolor: colors.lightBg, ...(activeTab === "steps" ? {} : { display: "flex", flexDirection: "column" }) }}>
         <SkipLink />
         {previewBanner}
         <Box sx={{ height: 3, bgcolor: colors.primary, mt: isPreviewMode ? "36px" : 0 }} />
@@ -1354,15 +1358,15 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   top: isPreviewMode ? "36px" : 0,
                   zIndex: 10,
                   bgcolor: colors.lightBg,
-                  pb: 2, pt: 1,
-                  mb: { xs: 2, sm: 3 },
+                  pb: { xs: 1, sm: 2 }, pt: { xs: 0.5, sm: 1 },
+                  mb: { xs: 1.5, sm: 3 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   variant="h2"
                   component="h1"
-                  sx={{ fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.5rem" }, fontWeight: 800, letterSpacing: "-0.02em", color: colors.text, mb: 1 }}
+                  sx={{ fontSize: { xs: "1.4rem", sm: "2.25rem", md: "2.5rem" }, lineHeight: { xs: 1.2, sm: 1.235 }, fontWeight: 800, letterSpacing: "-0.02em", color: colors.text, mb: { xs: 0.25, sm: 1 } }}
                 >
                   {lastItem?.name ?? ""}
                 </Typography>
@@ -1370,7 +1374,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   <>
                     <Typography
                       variant="body1"
-                      sx={{ fontSize: { xs: "0.9rem", sm: "1rem" }, fontWeight: 600, color: colors.text, letterSpacing: "0.05em" }}
+                      sx={{ fontSize: { xs: "0.8rem", sm: "1rem" }, lineHeight: { xs: 1.3, sm: 1.5 }, fontWeight: 600, color: colors.text, letterSpacing: "0.05em" }}
                     >
                       STEP {stepEntries.entries.length === 0 ? 0 : (stepEntries.entries[activeStepIndex]?.mainStepNumber ?? 1)} OF {stepEntries.totalMainSteps}
                     </Typography>
@@ -1380,43 +1384,46 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                     </Box>
                   </>
                 )}
+                {/* Tabs: Printer Overview, Steps and Appendix, each shown only when it has content. They share the sticky strip with the title so they stay in view while scrolling. */}
+                {visibleTabs.length > 1 && (
+                  <ToggleButtonGroup
+                    exclusive
+                    value={activeTab}
+                    role="tablist"
+                    aria-label="Sections of this guide"
+                    onKeyDown={handleTabKeyDown}
+                    sx={{
+                      display: "flex", mt: { xs: 0.75, sm: 1.5 }, bgcolor: "white", width: "100%",
+                      "& .MuiToggleButton-root": {
+                        flex: 1, px: { xs: 0.5, sm: 3 }, py: { xs: 0.25, sm: 0.75 }, minHeight: { xs: 36, sm: 48 },
+                        fontSize: { xs: "0.8rem", sm: "0.875rem" }, lineHeight: { xs: 1.2, sm: 1.75 },
+                        textTransform: "none", fontWeight: 700, color: colors.text,
+                      },
+                      "& .Mui-selected": { color: `${colors.primary} !important` },
+                    }}
+                  >
+                    {visibleTabs.map((tab) => (
+                      <ToggleButton
+                        key={tab}
+                        value={tab}
+                        id={`step-tab-${tab}`}
+                        role="tab"
+                        aria-selected={activeTab === tab}
+                        aria-pressed={undefined}
+                        aria-controls={`step-tabpanel-${tab}`}
+                        tabIndex={activeTab === tab ? 0 : -1}
+                        onClick={() => selectTab(tab)}
+                      >
+                        {tabLabels[tab]}
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                )}
               </Box>
-
-              {/* Tabs: Printer Overview, Steps and Appendix, each shown only when it has content */}
-              {visibleTabs.length > 1 && (
-                <ToggleButtonGroup
-                  exclusive
-                  value={activeTab}
-                  role="tablist"
-                  aria-label="Sections of this guide"
-                  onKeyDown={handleTabKeyDown}
-                  sx={{
-                    display: "flex", mb: { xs: 2, sm: 3 }, bgcolor: "white", width: "100%",
-                    "& .MuiToggleButton-root": { flex: 1, px: { xs: 1, sm: 3 }, minHeight: 48, textTransform: "none", fontWeight: 700, color: colors.text },
-                    "& .Mui-selected": { color: `${colors.primary} !important` },
-                  }}
-                >
-                  {visibleTabs.map((tab) => (
-                    <ToggleButton
-                      key={tab}
-                      value={tab}
-                      id={`step-tab-${tab}`}
-                      role="tab"
-                      aria-selected={activeTab === tab}
-                      aria-pressed={undefined}
-                      aria-controls={`step-tabpanel-${tab}`}
-                      tabIndex={activeTab === tab ? 0 : -1}
-                      onClick={() => selectTab(tab)}
-                    >
-                      {tabLabels[tab]}
-                    </ToggleButton>
-                  ))}
-                </ToggleButtonGroup>
-              )}
 
               {/* Quick Safety Reminders can be reopened from the overview (or from here when there is no overview) */}
               {sectionGroups.safety.length > 0 && !visibleTabs.includes("overview") && (
-                <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>{safetyButton}</Box>
+                <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 1 }}>{safetyButton}</Box>
               )}
 
               {activeTab === "overview" && (
@@ -1426,7 +1433,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   aria-labelledby={visibleTabs.length > 1 ? "step-tab-overview" : undefined}
                   sx={{ pb: { xs: 6, sm: 8 } }}
                 >
-                  {sectionGroups.safety.length > 0 && <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>{safetyButton}</Box>}
+                  {sectionGroups.safety.length > 0 && <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 1 }}>{safetyButton}</Box>}
                   {renderAccordion(sectionGroups.overview)}
                 </Box>
               )}
@@ -1493,7 +1500,10 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           </Container>
         </Box>
 
-        <Footer year={new Date().getFullYear()} isAdmin={false} />
+        {/* On Overview and Appendix the footer is pushed to the bottom of the window, so it does not jump when an accordion closes */}
+        <Box sx={{ mt: activeTab === "steps" ? 0 : "auto" }}>
+          <Footer year={new Date().getFullYear()} isAdmin={false} />
+        </Box>
 
         {/* Quick Safety Reminders: opens once per browser session, and from the "!" button */}
         <Dialog

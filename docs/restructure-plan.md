@@ -75,6 +75,12 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 t
    - Accessibility (axe-core 4.10, tags wcag2a, wcag2aa, wcag21a/aa, wcag22aa and best-practice) on 15 views: public overview (pop-up open, accordions collapsed and expanded), steps (sub-steps, gallery), image viewer, appendix, safety pop-up, admin Steps, Overview and Safety tabs, expanded step, add and edit step dialogs, tab-names dialog, and the alt-text page. 0 violations after one fix (accordion headings are now h2, with sub-items h3, so the heading order is valid).
    - Mobile (375px): no horizontal scroll and no touch targets under 24px on the overview, steps and appendix tabs, and the pop-up.
    - Not covered: a real screen-reader pass and testing against the live database.
+7. [x] Follow-up changes after review (committed locally, not yet pushed):
+   - Admin: tab names are renamed in place (pencil beside each tab, Enter or tick saves, Esc or X cancels). Only the renamed tab is saved. The "Edit tab names" pop-up was removed. The tab row is now a group of toggle buttons rather than a tab list, because a tab list cannot hold the pencil buttons.
+   - Editor: Increase and Decrease indent buttons. Plain text indents up to 3 levels (blockquote); a list item nests its list. The browser's invalid nested-list output is repaired. The public page allows blockquote, strips its inline styles and styles it itself.
+   - Public: on Printer Overview and Appendix the footer is pinned to the bottom of the window, so it does not jump when an accordion closes. The Steps tab is unchanged.
+   - Public: the safety "!" button has no ring and sits at the left edge of the content.
+   - Public: the tab bar sits in the sticky strip with the title, and the strip is compact on phones (about 100px of an 800px screen at 375px wide).
 
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.
