@@ -36,7 +36,7 @@ const TEAL = "#000054";
 const GENERATE_BATCH_SIZE = 8;
 
 type Row = {
-  key: string; // unique image key matching the review API: "item:<levelId>:<itemId>" / "step:<parentItemId>:<stepId>"
+  key: string; // unique image key matching the review API: "item:<levelId>:<itemId>" / "step:<parentItemId>:<stepId>:<imageIndex>"
   kind: "item-thumbnail" | "step-image";
   levelId?: string;
   itemId?: string;
@@ -81,17 +81,20 @@ function buildRows(state: TutorialState): Row[] {
     for (const [parentItemId, steps] of Object.entries(state.steps)) {
       const parent = lastLevelItems.get(parentItemId);
       steps.forEach((step, index) => {
-        if (!step.imageUrl) return;
-        rows.push({
-          key: `step:${parentItemId}:${step.id}`,
-          kind: "step-image",
-          parentItemId,
-          stepId: step.id,
-          location: `${parent?.name ?? parentItemId} → Step ${index + 1}: ${step.title}`,
-          imageUrl: step.imageUrl,
-          currentAlt: step.imageAlt,
-          draftAlt: step.imageAlt ?? "",
-          touched: false,
+        step.imageUrls.forEach((imageUrl, imageIndex) => {
+          const currentAlt = step.imageAlts[imageIndex] ?? undefined;
+          const imageLabel = step.imageUrls.length > 1 ? ` (image ${imageIndex + 1} of ${step.imageUrls.length})` : "";
+          rows.push({
+            key: `step:${parentItemId}:${step.id}:${imageIndex}`,
+            kind: "step-image",
+            parentItemId,
+            stepId: step.id,
+            location: `${parent?.name ?? parentItemId} → Step ${index + 1}: ${step.title}${imageLabel}`,
+            imageUrl,
+            currentAlt,
+            draftAlt: currentAlt ?? "",
+            touched: false,
+          });
         });
       });
     }
@@ -277,7 +280,7 @@ export default function AltTextPage() {
       const entries: AltTextEntry[] = dirtyRows.map((row) =>
         row.kind === "item-thumbnail"
           ? { kind: "item-thumbnail", levelId: row.levelId!, itemId: row.itemId!, alt: row.draftAlt.trim() }
-          : { kind: "step-image", parentItemId: row.parentItemId!, stepId: row.stepId!, alt: row.draftAlt.trim() },
+          : { kind: "step-image", parentItemId: row.parentItemId!, stepId: row.stepId!, imageUrl: row.imageUrl, alt: row.draftAlt.trim() },
       );
       const token = await getAuthToken();
       const res = await fetch("/api/tutorial", {

@@ -1,6 +1,6 @@
 # GraphicDesign restructure: plan and progress log
 
-Last updated: 2026-10-22. Status: phase 1 done (local commit, not pushed).
+Last updated: 2026-10-22. Status: phases 1 and 2 done. Phase 1 is on Staging. Phase 2 is committed locally and not yet pushed.
 
 ## Ground rules
 - Build on a branch based on `Staging-GraphicDesign`. Never push to `main`. Confirm before any push (see CLAUDE.md on Staging).
@@ -41,7 +41,14 @@ Last updated: 2026-10-22. Status: phase 1 done (local commit, not pushed).
 
 ## Build order (each is a separate reviewable commit)
 1. [x] Hierarchy: Paper Type removed from `scripts/seed-content.js`, with Products as `type2` at level_2. The app code is already level-agnostic (driven by `settings/hierarchy`), so nothing else needed changing. `tsc` and `next lint` pass. Re-run `npm run seed-content` against the target database to apply it. Existing Paper items in Firestore would be orphaned, which is fine because we start fresh.
-2. [ ] Multi-image steps (`imageUrls[]`), with per-image alt text in the alt-text tool.
+2. [x] Multi-image steps. Steps now hold `imageUrls[]` with a parallel `imageAlts[]` (`""` = decorative, `null` = not yet reviewed). Details:
+   - Older single-image documents (`imageUrl` / `imageAlt`) are upgraded when read, and rewritten on the next save.
+   - New uploads get unique file names. Apparel's index-based names could overwrite another image's file after a reorder.
+   - A kept image keeps its alt text when moved. A new or replaced image starts unreviewed.
+   - Alt-text tool: one row per image (key `step:<parent>:<step>:<index>`). Saves match the image by URL.
+   - Admin step dialog: add many images, drag to reorder, crop and remove each. The video URL can now be set alongside images (no more image-or-video toggle), as in Apparel.
+   - Public: a gallery grid per step, and the viewer has previous/next buttons and arrow keys. Stored alt text is used, with the step title as the fallback.
+   - Checks: `tsc`, `next lint` and `next build` pass (build with placeholder Firebase env). Not yet tested against a live database.
 3. [ ] Sub-steps (backend, admin dialog, public display, alt-text coverage).
 4. [ ] Tabs: `section` field, app-wide editable labels, admin tab editor, public tabs with links, empty-tab hiding.
 5. [ ] Safety popup (once per browser session) plus the "!" icon.
@@ -56,5 +63,6 @@ Last updated: 2026-10-22. Status: phase 1 done (local commit, not pushed).
 - Visual Arts `main` has no tab component on its steps page.
 
 ## Open items
-- None blocking. Next action: phase 2 (multi-image steps and per-image alt text).
+- None blocking. Next action: phase 3 (sub-steps).
+- Staging and main share one Firestore database (`path-ci-graphicdesign`). Content edits in staging also show on main. A separate staging database was discussed and not yet decided.
 - Before any push: ask first (Staging only).

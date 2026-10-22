@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+
 import { FieldValue } from "firebase-admin/firestore";
 
 import { db, adminDb } from "./firebase-admin";
@@ -54,9 +56,10 @@ export type Step = {
   id: string;
   title: string;
   contentHtml: string;
-  imageUrl: string;
-  // Empty string means "decorative image"; undefined means never reviewed
-  imageAlt?: string;
+  // Any number of images, in display order. imageAlts runs parallel to imageUrls:
+  // "" means "decorative image"; null means never reviewed.
+  imageUrls: string[];
+  imageAlts: (string | null)[];
   videoUrl?: string;
   order: number;
   createdAt: Date;
@@ -134,6 +137,33 @@ function toDate(value: unknown): Date {
     return (value as { toDate: () => Date }).toDate();
   }
   return new Date();
+}
+
+// Reads a step document, upgrading the older single-image shape (imageUrl /
+// imageAlt) to imageUrls / imageAlts so callers only deal with one shape.
+function toStep(id: string, data: Record<string, unknown>): Step {
+  const legacyUrl = typeof data.imageUrl === "string" ? data.imageUrl : "";
+  const urls = Array.isArray(data.imageUrls)
+    ? (data.imageUrls as string[])
+    : legacyUrl
+      ? [legacyUrl]
+      : [];
+  const storedAlts = Array.isArray(data.imageAlts)
+    ? (data.imageAlts as (string | null)[])
+    : typeof data.imageAlt === "string"
+      ? [data.imageAlt]
+      : [];
+  const { imageUrl: _legacyUrl, imageAlt: _legacyAlt, ...rest } = data;
+  void _legacyUrl;
+  void _legacyAlt;
+  return {
+    ...(rest as Omit<Step, "id" | "imageUrls" | "imageAlts" | "createdAt" | "lastModified">),
+    id,
+    imageUrls: urls,
+    imageAlts: urls.map((_, i) => storedAlts[i] ?? null),
+    createdAt: toDate(data.createdAt),
+    lastModified: toDate(data.lastModified),
+  };
 }
 
 // Resolves a human-readable location path for a deleted item by walking down
@@ -332,12 +362,7 @@ export async function getTutorialState(publishedOnly = false): Promise<TutorialS
       (items[lastLevel.id] ?? []).map(async (item) => {
         const snap = await stepsCol(item.id).get();
         steps[item.id] = snap.docs
-          .map((doc) => ({
-            ...(doc.data() as Omit<Step, "id" | "createdAt" | "lastModified">),
-            id: doc.id,
-            createdAt: toDate(doc.data().createdAt),
-            lastModified: toDate(doc.data().lastModified),
-          }))
+          .map((doc) => toStep(doc.id, doc.data()))
           .sort((a, b) => a.order - b.order);
       }),
     );
@@ -533,11 +558,27 @@ export async function removeInvalidChildren(
 
 // ============= STEPS =============
 
+// Uploads any new (data URL) images and keeps existing URLs as they are. Each
+// upload gets its own unique file name so reordering or removing images can
+// never overwrite a file another image still points at.
+async function resolveStepImages(
+  parentItemId: string,
+  stepId: string,
+  imageDataUrls: string[],
+): Promise<string[]> {
+  const urls = await Promise.all(
+    imageDataUrls.map((value) =>
+      resolveImageUrl(value, `steps/${parentItemId}/${stepId}/image-${randomUUID().slice(0, 8)}`),
+    ),
+  );
+  return urls.filter(Boolean);
+}
+
 export async function addStep(
   parentItemId: string,
   title: string,
   contentHtml: string,
-  imageDataUrl: string,
+  imageDataUrls: string[],
   videoUrl?: string,
   modifiedBy?: string,
 ): Promise<TutorialState> {
@@ -548,12 +589,13 @@ export async function addStep(
   );
 
   const ref = stepsCol(parentItemId).doc();
-  const imageUrl = await resolveImageUrl(imageDataUrl, `steps/${parentItemId}/${ref.id}/image`);
+  const imageUrls = await resolveStepImages(parentItemId, ref.id, imageDataUrls);
 
   await ref.set({
     title,
     contentHtml,
-    imageUrl,
+    imageUrls,
+    imageAlts: imageUrls.map(() => null),
     videoUrl: videoUrl ?? "",
     order: maxOrder + 1,
     createdAt: FieldValue.serverTimestamp(),
@@ -567,7 +609,7 @@ export async function addStep(
 export async function updateStep(
   parentItemId: string,
   stepId: string,
-  updates: { title?: string; contentHtml?: string; imageDataUrl?: string; videoUrl?: string },
+  updates: { title?: string; contentHtml?: string; imageDataUrls?: string[]; videoUrl?: string },
   modifiedBy?: string,
 ): Promise<TutorialState> {
   const fields: Record<string, unknown> = {
@@ -578,13 +620,18 @@ export async function updateStep(
   if (updates.title !== undefined) fields.title = updates.title;
   if (updates.contentHtml !== undefined) fields.contentHtml = updates.contentHtml;
   if (updates.videoUrl !== undefined) fields.videoUrl = updates.videoUrl;
-  if (updates.imageDataUrl !== undefined) {
-    fields.imageUrl = await resolveImageUrl(
-      updates.imageDataUrl,
-      `steps/${parentItemId}/${stepId}/image`,
-    );
-    // A newly uploaded image invalidates the old description
-    if (updates.imageDataUrl.startsWith("data:")) fields.imageAlt = FieldValue.delete();
+  if (updates.imageDataUrls !== undefined) {
+    const ref = stepsCol(parentItemId).doc(stepId);
+    const current = await ref.get();
+    const before = current.exists ? toStep(stepId, current.data() ?? {}) : null;
+    // An image that is kept (same URL) keeps its alt text, wherever it moves to.
+    // A newly uploaded image gets a new URL, so its alt text starts out unreviewed.
+    const altByUrl = new Map((before?.imageUrls ?? []).map((url, i) => [url, before!.imageAlts[i]]));
+    const imageUrls = await resolveStepImages(parentItemId, stepId, updates.imageDataUrls);
+    fields.imageUrls = imageUrls;
+    fields.imageAlts = imageUrls.map((url) => altByUrl.get(url) ?? null);
+    fields.imageUrl = FieldValue.delete();
+    fields.imageAlt = FieldValue.delete();
   }
 
   await stepsCol(parentItemId).doc(stepId).update(fields);
@@ -680,7 +727,8 @@ export async function setStepOrder(
 
 export type AltTextEntry =
   | { kind: "item-thumbnail"; levelId: string; itemId: string; alt: string }
-  | { kind: "step-image"; parentItemId: string; stepId: string; alt: string };
+  // A step can hold several images, so the image is identified by its URL
+  | { kind: "step-image"; parentItemId: string; stepId: string; imageUrl: string; alt: string };
 
 const BATCH_LIMIT = 400; // Firestore caps batches at 500 writes
 
@@ -688,25 +736,44 @@ export async function applyAltText(
   entries: AltTextEntry[],
   modifiedBy?: string,
 ): Promise<TutorialState> {
-  for (let i = 0; i < entries.length; i += BATCH_LIMIT) {
+  const fields = () => ({
+    lastModified: FieldValue.serverTimestamp(),
+    modifiedBy: modifiedBy ?? "system",
+  });
+
+  const thumbnails = entries.filter((e) => e.kind === "item-thumbnail");
+  for (let i = 0; i < thumbnails.length; i += BATCH_LIMIT) {
     const batch = db.batch();
-    for (const entry of entries.slice(i, i + BATCH_LIMIT)) {
-      const fields = {
-        lastModified: FieldValue.serverTimestamp(),
-        modifiedBy: modifiedBy ?? "system",
-      };
-      if (entry.kind === "item-thumbnail") {
-        batch.update(itemsCol(entry.levelId).doc(entry.itemId), {
-          ...fields,
-          thumbnailAlt: entry.alt,
-        });
-      } else {
-        batch.update(stepsCol(entry.parentItemId).doc(entry.stepId), {
-          ...fields,
-          imageAlt: entry.alt,
-        });
-      }
+    for (const entry of thumbnails.slice(i, i + BATCH_LIMIT)) {
+      if (entry.kind !== "item-thumbnail") continue;
+      batch.update(itemsCol(entry.levelId).doc(entry.itemId), { ...fields(), thumbnailAlt: entry.alt });
     }
+    await batch.commit();
+  }
+
+  // Group image entries by step so each step is read and written once
+  const byStep = new Map<string, { parentItemId: string; stepId: string; alts: Map<string, string> }>();
+  for (const entry of entries) {
+    if (entry.kind !== "step-image") continue;
+    const key = `${entry.parentItemId}:${entry.stepId}`;
+    const group = byStep.get(key) ?? { parentItemId: entry.parentItemId, stepId: entry.stepId, alts: new Map() };
+    group.alts.set(entry.imageUrl, entry.alt);
+    byStep.set(key, group);
+  }
+
+  const groups = Array.from(byStep.values());
+  for (let i = 0; i < groups.length; i += BATCH_LIMIT) {
+    const chunk = groups.slice(i, i + BATCH_LIMIT);
+    const snaps = await Promise.all(chunk.map((g) => stepsCol(g.parentItemId).doc(g.stepId).get()));
+    const batch = db.batch();
+    chunk.forEach((group, j) => {
+      const snap = snaps[j];
+      if (!snap.exists) return;
+      const step = toStep(group.stepId, snap.data() ?? {});
+      // Match by URL, so an image that was replaced or moved since the review is never mislabelled
+      const imageAlts = step.imageUrls.map((url, k) => group.alts.get(url) ?? step.imageAlts[k]);
+      batch.update(snap.ref, { ...fields(), imageUrls: step.imageUrls, imageAlts, imageUrl: FieldValue.delete(), imageAlt: FieldValue.delete() });
+    });
     await batch.commit();
   }
 

@@ -12,7 +12,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Add as AddIcon, Crop as CropIcon, Image as ImageIcon, Link as LinkIcon } from "@mui/icons-material";
+import { Add as AddIcon, Crop as CropIcon, DragIndicator as DragIndicatorIcon } from "@mui/icons-material";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { useEffect, useRef, useState } from "react";
 import RichTextEditor from "../RichTextEditor";
 import { validateImageFile, processUpload } from "../utils/imageUpload";
@@ -29,10 +30,12 @@ function getVideoEmbedUrl(url: string): string | null {
   return null;
 }
 
+type GalleryImage = { id: string; dataUrl: string; original: string };
+
 type SaveData = {
   title: string;
   contentHtml: string;
-  imageDataUrl: string;
+  imageDataUrls: string[];
   videoUrl: string;
 };
 
@@ -46,7 +49,7 @@ type Props = {
   initialData?: {
     title?: string;
     contentHtml?: string;
-    imageUrl?: string;
+    imageUrls?: string[];
     videoUrl?: string;
   };
 };
@@ -62,14 +65,12 @@ export default function AddEditStepDialog({
 }: Props) {
   const [title, setTitle] = useState("");
   const [contentHtml, setContentHtml] = useState("");
-  const [mediaType, setMediaType] = useState<"image" | "video">("image");
-  const [imageDataUrl, setImageDataUrl] = useState("");
+  const [images, setImages] = useState<GalleryImage[]>([]);
   const [videoUrl, setVideoUrl] = useState("");
   const [imageError, setImageError] = useState("");
   const [compressed, setCompressed] = useState(false);
-  const [cropOpen, setCropOpen] = useState(false);
+  const [cropIndex, setCropIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const originalImageRef = useRef("");
   const prevOpenRef = useRef(false);
 
   useEffect(() => {
@@ -81,22 +82,11 @@ export default function AddEditStepDialog({
     prevOpenRef.current = true;
     setTitle(initialData?.title ?? "");
     setContentHtml(initialData?.contentHtml ?? "");
-    const vidUrl = initialData?.videoUrl ?? "";
-    const imgUrl = initialData?.imageUrl ?? "";
-    if (vidUrl) {
-      setMediaType("video");
-      setVideoUrl(vidUrl);
-      setImageDataUrl("");
-      originalImageRef.current = "";
-    } else {
-      setMediaType("image");
-      setImageDataUrl(imgUrl);
-      originalImageRef.current = imgUrl;
-      setVideoUrl("");
-    }
+    setImages((initialData?.imageUrls ?? []).map((url) => ({ id: crypto.randomUUID(), dataUrl: url, original: url })));
+    setVideoUrl(initialData?.videoUrl ?? "");
     setImageError("");
     setCompressed(false);
-    setCropOpen(false);
+    setCropIndex(null);
   }, [open, initialData]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -106,16 +96,23 @@ export default function AddEditStepDialog({
     if (err) { setImageError(err); return; }
     setImageError("");
     const { dataUrl, compressed: wasCompressed } = await processUpload(file);
-    setImageDataUrl(dataUrl);
-    originalImageRef.current = dataUrl;
-    setCompressed(wasCompressed);
+    setImages((prev) => [...prev, { id: crypto.randomUUID(), dataUrl, original: dataUrl }]);
+    if (wasCompressed) setCompressed(true);
     e.target.value = "";
   }
 
-  function clearImage() {
-    setImageDataUrl("");
-    originalImageRef.current = "";
-    setCompressed(false);
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleImageDragEnd(result: DropResult) {
+    if (!result.destination) return;
+    setImages((prev) => {
+      const next = Array.from(prev);
+      const [moved] = next.splice(result.source.index, 1);
+      next.splice(result.destination!.index, 0, moved);
+      return next;
+    });
   }
 
   function handleSave() {
@@ -123,8 +120,8 @@ export default function AddEditStepDialog({
     onSave({
       title: title.trim(),
       contentHtml,
-      imageDataUrl: mediaType === "image" ? imageDataUrl : "",
-      videoUrl: mediaType === "video" ? videoUrl.trim() : "",
+      imageDataUrls: images.map((img) => img.dataUrl),
+      videoUrl: videoUrl.trim(),
     });
   }
 
@@ -149,154 +146,150 @@ export default function AddEditStepDialog({
 
             <RichTextEditor label="Content" value={contentHtml} onChange={setContentHtml} />
 
-            {/* Media section */}
+            {/* Media section: any number of images, plus an optional video */}
             <Box>
-              <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>Media</Typography>
-              <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                <Button
-                  size="small"
-                  variant={mediaType === "image" ? "contained" : "outlined"}
-                  aria-pressed={mediaType === "image"}
-                  startIcon={<ImageIcon />}
-                  onClick={() => { setMediaType("image"); setVideoUrl(""); }}
-                  sx={{
-                    textTransform: "none", fontWeight: 600,
-                    ...(mediaType === "image"
-                      ? { bgcolor: "#000054", color: "#fff", "&:hover": { bgcolor: "#00003f" } }
-                      : { color: "#000054", borderColor: "#000054" }),
-                  }}
-                >
-                  Image
-                </Button>
-                <Button
-                  size="small"
-                  variant={mediaType === "video" ? "contained" : "outlined"}
-                  aria-pressed={mediaType === "video"}
-                  startIcon={<LinkIcon />}
-                  onClick={() => { setMediaType("video"); clearImage(); }}
-                  sx={{
-                    textTransform: "none", fontWeight: 600,
-                    ...(mediaType === "video"
-                      ? { bgcolor: "#000054", color: "#fff", "&:hover": { bgcolor: "#00003f" } }
-                      : { color: "#000054", borderColor: "#000054" }),
-                  }}
-                >
-                  Video URL
-                </Button>
-              </Stack>
+              <Typography variant="body2" fontWeight={500} sx={{ mb: 0.5 }}>Images</Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                Optional &mdash; add as many as this step needs. Drag the handle to reorder.
+              </Typography>
 
-              {/* Image upload section */}
-              {mediaType === "image" && (
-                <Box>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>Optional</Typography>
-
-                  {!imageDataUrl && (
-                    <Stack direction="row" alignItems="center" spacing={1.5}>
-                      <IconButton onClick={() => fileInputRef.current?.click()} aria-label="Upload image" sx={UPLOAD_BTN_SX}>
-                        <AddIcon />
-                      </IconButton>
-                      <Typography variant="caption" color="text.secondary">
-                        JPEG, PNG, or GIF · max 700 KB
-                      </Typography>
+              <DragDropContext onDragEnd={handleImageDragEnd}>
+                <Droppable droppableId="step-images" direction="horizontal">
+                  {(droppableProvided) => (
+                    <Stack
+                      ref={droppableProvided.innerRef}
+                      {...droppableProvided.droppableProps}
+                      direction="row"
+                      flexWrap="wrap"
+                      gap={2}
+                      sx={{ mb: images.length > 0 ? 1.5 : 0 }}
+                    >
+                      {images.map((img, index) => (
+                        <Draggable key={img.id} draggableId={img.id} index={index}>
+                          {(dragProvided, snapshot) => (
+                            <Box
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              sx={{
+                                position: "relative", display: "inline-block", borderRadius: 1,
+                                boxShadow: snapshot.isDragging ? "0 8px 24px rgba(0,0,0,0.2)" : "none",
+                              }}
+                            >
+                              <Box
+                                component="img"
+                                src={img.dataUrl}
+                                alt={`Step image ${index + 1} preview`}
+                                sx={{
+                                  width: 160, maxWidth: "100%", aspectRatio: "4/3",
+                                  objectFit: "cover", borderRadius: 1,
+                                  border: "1px solid", borderColor: "divider", display: "block",
+                                }}
+                              />
+                              <Box
+                                {...dragProvided.dragHandleProps}
+                                aria-label={`Reorder image ${index + 1} of ${images.length}. Press space to pick up, then use the arrow keys.`}
+                                sx={{
+                                  position: "absolute", top: 4, left: 4,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  width: 28, height: 28, borderRadius: 1,
+                                  bgcolor: "rgba(255,255,255,0.9)", cursor: "grab", color: "text.secondary",
+                                  "&:hover": { bgcolor: "#fff" },
+                                }}
+                              >
+                                <DragIndicatorIcon fontSize="small" />
+                              </Box>
+                              <Stack direction="row" spacing={0.5} sx={{ position: "absolute", top: 4, right: 4 }}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => setCropIndex(index)}
+                                  aria-label={`Crop image ${index + 1}`}
+                                  sx={{ bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
+                                >
+                                  <CropIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => removeImage(index)}
+                                  aria-label={`Remove image ${index + 1}`}
+                                  sx={{ bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
+                                >
+                                  <span aria-hidden="true">✕</span>
+                                </IconButton>
+                              </Stack>
+                            </Box>
+                          )}
+                        </Draggable>
+                      ))}
+                      {droppableProvided.placeholder}
                     </Stack>
                   )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif"
-                    style={{ display: "none" }}
-                    onChange={(e) => void handleFileChange(e)}
-                  />
+                </Droppable>
+              </DragDropContext>
 
-                  {imageError && (
-                    <Typography variant="caption" color="error" display="block" role="alert" sx={{ mt: 0.5 }}>
-                      {imageError}
-                    </Typography>
-                  )}
-                  {compressed && (
-                    <Typography variant="caption" display="block" role="status" sx={{ mt: 0.5, color: "#7A5C00" }}>
-                      Image was compressed to meet the 700 KB limit.
-                    </Typography>
-                  )}
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <IconButton onClick={() => fileInputRef.current?.click()} aria-label="Add image" sx={UPLOAD_BTN_SX}>
+                  <AddIcon />
+                </IconButton>
+                <Typography variant="caption" color="text.secondary">
+                  JPEG, PNG, or GIF · max 700 KB each
+                </Typography>
+              </Stack>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif"
+                style={{ display: "none" }}
+                onChange={(e) => void handleFileChange(e)}
+              />
 
-                  {imageDataUrl && (
-                    <Box sx={{ mt: 2, display: "flex", gap: 2, alignItems: "flex-start" }}>
-                      <Box sx={{ position: "relative", display: "inline-block" }}>
+              {imageError && (
+                <Typography variant="caption" color="error" display="block" role="alert" sx={{ mt: 0.5 }}>
+                  {imageError}
+                </Typography>
+              )}
+              {compressed && (
+                <Typography variant="caption" display="block" role="status" sx={{ mt: 0.5, color: "#7A5C00" }}>
+                  An image was compressed to meet the 700 KB limit.
+                </Typography>
+              )}
+
+              <Stack spacing={1.5} sx={{ mt: 3 }}>
+                <Typography variant="body2" fontWeight={500}>Video</Typography>
+                <TextField
+                  label="Video URL"
+                  placeholder="YouTube, Vimeo, or direct .mp4 link (optional)"
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                  fullWidth
+                  size="small"
+                />
+                {embedUrl && (
+                  <Box sx={{ position: "relative" }}>
+                    {isDirectVideo ? (
+                      <Box component="video" controls src={videoUrl} sx={{ width: "100%", borderRadius: 1 }} />
+                    ) : (
+                      <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
                         <Box
-                          component="img"
-                          src={imageDataUrl}
-                          alt="Step image preview"
-                          sx={{
-                            width: 220, maxWidth: "100%", aspectRatio: "4/3",
-                            objectFit: "cover", borderRadius: 1,
-                            border: "1px solid", borderColor: "divider",
-                            display: "block",
-                          }}
+                          component="iframe"
+                          src={embedUrl}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          title="Video preview"
+                          sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
                         />
-                        <IconButton
-                          size="small"
-                          onClick={clearImage}
-                          aria-label="Remove image"
-                          sx={{ position: "absolute", top: 0, right: 0, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
-                        >
-                          <span aria-hidden="true">✕</span>
-                        </IconButton>
                       </Box>
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1 }}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<CropIcon />}
-                          onClick={() => setCropOpen(true)}
-                          sx={{ color: "#000054", borderColor: "#000054", textTransform: "none", fontWeight: 600 }}
-                        >
-                          Crop
-                        </Button>
-                      </Box>
-                    </Box>
-                  )}
-                </Box>
-              )}
-
-              {/* Video URL section */}
-              {mediaType === "video" && (
-                <Stack spacing={1.5}>
-                  <TextField
-                    label="Video URL"
-                    placeholder="YouTube, Vimeo, or direct .mp4 link"
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    fullWidth
-                    size="small"
-                  />
-                  {embedUrl && (
-                    <Box sx={{ position: "relative" }}>
-                      {isDirectVideo ? (
-                        <Box component="video" controls src={videoUrl} sx={{ width: "100%", borderRadius: 1 }} />
-                      ) : (
-                        <Box sx={{ position: "relative", width: "100%", paddingBottom: "56.25%", borderRadius: 1, overflow: "hidden" }}>
-                          <Box
-                            component="iframe"
-                            src={embedUrl}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            title="Video preview"
-                            sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                          />
-                        </Box>
-                      )}
-                      <IconButton
-                        size="small"
-                        onClick={() => setVideoUrl("")}
-                        aria-label="Remove video"
-                        sx={{ position: "absolute", top: 4, right: 4, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
-                      >
-                        <span aria-hidden="true">✕</span>
-                      </IconButton>
-                    </Box>
-                  )}
-                </Stack>
-              )}
+                    )}
+                    <IconButton
+                      size="small"
+                      onClick={() => setVideoUrl("")}
+                      aria-label="Remove video"
+                      sx={{ position: "absolute", top: 4, right: 4, bgcolor: "rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#fff" } }}
+                    >
+                      <span aria-hidden="true">✕</span>
+                    </IconButton>
+                  </Box>
+                )}
+              </Stack>
             </Box>
           </Stack>
         </DialogContent>
@@ -318,11 +311,14 @@ export default function AddEditStepDialog({
       </Dialog>
 
       <ImageCropDialog
-        open={cropOpen}
-        onClose={() => setCropOpen(false)}
-        imageDataUrl={imageDataUrl}
-        originalDataUrl={originalImageRef.current}
-        onApply={(cropped) => setImageDataUrl(cropped)}
+        open={cropIndex !== null}
+        onClose={() => setCropIndex(null)}
+        imageDataUrl={cropIndex !== null ? images[cropIndex]?.dataUrl ?? "" : ""}
+        originalDataUrl={cropIndex !== null ? images[cropIndex]?.original ?? "" : ""}
+        onApply={(cropped) => {
+          if (cropIndex === null) return;
+          setImages((prev) => prev.map((img, i) => (i === cropIndex ? { ...img, dataUrl: cropped } : img)));
+        }}
       />
     </>
   );

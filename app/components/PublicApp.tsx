@@ -20,6 +20,8 @@ import {
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
   Home as HomeIcon,
   Image as ImageIcon,
@@ -371,8 +373,24 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   // Debounced copy of activeStepIndex for the screen-reader status region,
   // so scroll jitter doesn't trigger a flood of announcements
   const [announcedStepIndex, setAnnouncedStepIndex] = useState(0);
-  const [enlargedImage, setEnlargedImage] = useState<{ url: string; alt: string } | null>(null);
+  const [enlargedGallery, setEnlargedGallery] = useState<{ items: { url: string; alt: string }[]; index: number } | null>(null);
   const [imgZoom, setImgZoom] = useState(1);
+  const imgZoomRef = useRef(1);
+  imgZoomRef.current = imgZoom;
+
+  // Arrow keys move through a step's images while the viewer is open
+  useEffect(() => {
+    if (!enlargedGallery || enlargedGallery.items.length < 2) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      const delta = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      if (!delta) return;
+      // While zoomed, the arrow keys pan the image instead
+      if (imgZoomRef.current > 1) return;
+      setEnlargedGallery((g) => (g && g.index + delta >= 0 && g.index + delta < g.items.length ? { ...g, index: g.index + delta } : g));
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [enlargedGallery]);
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -1126,7 +1144,39 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                           />
                         )}
 
-                        {embedUrl ? (
+                        {step.imageUrls.length > 0 && (
+                          <Box
+                            sx={{
+                              display: "grid", gap: 2, mb: embedUrl ? { xs: 2, sm: 3 } : 0,
+                              gridTemplateColumns: step.imageUrls.length > 1 ? { xs: "1fr", sm: "repeat(auto-fit, minmax(240px, 1fr))" } : "1fr",
+                            }}
+                          >
+                            {step.imageUrls.map((url, i) => {
+                              // Stored alt text wins; an empty string means decorative. Unreviewed images fall back to the step title.
+                              const fallback = step.imageUrls.length > 1 ? `${step.title} — image ${i + 1}` : step.title;
+                              const alt = step.imageAlts[i] ?? fallback;
+                              return (
+                                <StepImage
+                                  key={`${url}-${i}`}
+                                  src={url}
+                                  alt={alt}
+                                  onClick={() => {
+                                    setEnlargedGallery({
+                                      items: step.imageUrls.map((u, j) => ({
+                                        url: u,
+                                        alt: step.imageAlts[j] ?? (step.imageUrls.length > 1 ? `${step.title} — image ${j + 1}` : (step.title || "Step image")),
+                                      })),
+                                      index: i,
+                                    });
+                                    setImgZoom(1);
+                                  }}
+                                />
+                              );
+                            })}
+                          </Box>
+                        )}
+
+                        {embedUrl && (
                           isDirectVideo ? (
                             <Box component="video" controls sx={{ width: "100%", borderRadius: 1 }}>
                               <source src={step.videoUrl} />
@@ -1143,13 +1193,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                               />
                             </Box>
                           )
-                        ) : step.imageUrl ? (
-                          <StepImage
-                            src={step.imageUrl}
-                            alt={step.imageAlt ?? step.title}
-                            onClick={() => { setEnlargedImage({ url: step.imageUrl!, alt: step.imageAlt ?? (step.title || "Step image") }); setImgZoom(1); }}
-                          />
-                        ) : null}
+                        )}
                       </CardContent>
                     </Card>
                   );
@@ -1163,18 +1207,18 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
         {/* Image zoom modal */}
         <Modal
-          open={!!enlargedImage}
-          onClose={() => { setEnlargedImage(null); setImgZoom(1); }}
+          open={!!enlargedGallery}
+          onClose={() => { setEnlargedGallery(null); setImgZoom(1); }}
           sx={{ display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "rgba(0,0,0,0.85)" }}
         >
           <Box
             role="dialog"
             aria-modal="true"
-            aria-label={enlargedImage ? `Enlarged image: ${enlargedImage.alt}` : "Enlarged image"}
+            aria-label={enlargedGallery ? `Enlarged image${enlargedGallery.items.length > 1 ? ` ${enlargedGallery.index + 1} of ${enlargedGallery.items.length}` : ""}${enlargedGallery.items[enlargedGallery.index]?.alt ? `: ${enlargedGallery.items[enlargedGallery.index].alt}` : ""}` : "Enlarged image"}
             sx={{ position: "relative", outline: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}
           >
             <IconButton
-              onClick={() => { setEnlargedImage(null); setImgZoom(1); }}
+              onClick={() => { setEnlargedGallery(null); setImgZoom(1); }}
               aria-label="Close image viewer"
               sx={{
                 position: "absolute", top: 8, right: 8, zIndex: 1,
@@ -1196,17 +1240,41 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                 "&:focus-visible": { outline: "3px solid #fff", outlineOffset: 2 },
               }}
             >
-              {enlargedImage && (
+              {enlargedGallery && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={enlargedImage.url}
-                  alt={enlargedImage.alt}
+                  src={enlargedGallery.items[enlargedGallery.index].url}
+                  alt={enlargedGallery.items[enlargedGallery.index].alt}
                   style={{ display: "block", width: `${imgZoom * 100}%`, height: "auto", cursor: imgZoom > 1 ? "zoom-out" : "zoom-in" }}
                   onClick={() => setImgZoom((z) => (z > 1 ? 1 : 1.5))}
                 />
               )}
             </Box>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ bgcolor: "rgba(0,0,0,0.6)", borderRadius: 2, px: 1.5, py: 0.5 }}>
+              {enlargedGallery && enlargedGallery.items.length > 1 && (
+                <>
+                  <IconButton
+                    onClick={() => { setEnlargedGallery((g) => (g ? { ...g, index: g.index - 1 } : g)); setImgZoom(1); }}
+                    disabled={enlargedGallery.index === 0}
+                    aria-label="Previous image"
+                    sx={{ color: "white", width: 44, height: 44, "&.Mui-disabled": { color: "rgba(255,255,255,0.4)" } }}
+                  >
+                    <ChevronLeftIcon fontSize="small" />
+                  </IconButton>
+                  <Typography variant="caption" sx={{ color: "white", minWidth: 44, textAlign: "center" }}>
+                    {enlargedGallery.index + 1} / {enlargedGallery.items.length}
+                  </Typography>
+                  <IconButton
+                    onClick={() => { setEnlargedGallery((g) => (g ? { ...g, index: g.index + 1 } : g)); setImgZoom(1); }}
+                    disabled={enlargedGallery.index === enlargedGallery.items.length - 1}
+                    aria-label="Next image"
+                    sx={{ color: "white", width: 44, height: 44, "&.Mui-disabled": { color: "rgba(255,255,255,0.4)" } }}
+                  >
+                    <ChevronRightIcon fontSize="small" />
+                  </IconButton>
+                  <Box aria-hidden="true" sx={{ width: "1px", height: 24, bgcolor: "rgba(255,255,255,0.3)", mx: 0.5 }} />
+                </>
+              )}
               <IconButton
                 onClick={() => setImgZoom((z) => Math.max(1, z - 0.5))}
                 disabled={imgZoom <= 1}

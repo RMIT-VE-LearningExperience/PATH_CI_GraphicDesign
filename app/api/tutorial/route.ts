@@ -35,8 +35,8 @@ type ActionPayload =
   | { action: "linkItem"; parentLevelId: string; parentItemId: string; childLevelId: string; childItemId: string }
   | { action: "unlinkItem"; parentLevelId: string; parentItemId: string; childItemId: string }
   | { action: "updateRelationship"; parentLevelId: string; parentItemId: string; childItemId: string; published: boolean }
-  | { action: "addStep"; parentItemId: string; title: string; contentHtml: string; imageDataUrl: string; videoUrl?: string }
-  | { action: "updateStep"; parentItemId: string; stepId: string; title?: string; contentHtml?: string; imageDataUrl?: string; videoUrl?: string }
+  | { action: "addStep"; parentItemId: string; title: string; contentHtml: string; imageDataUrls: string[]; videoUrl?: string }
+  | { action: "updateStep"; parentItemId: string; stepId: string; title?: string; contentHtml?: string; imageDataUrls?: string[]; videoUrl?: string }
   | { action: "deleteStep"; parentItemId: string; stepId: string }
   | { action: "reorderStep"; parentItemId: string; stepId: string; direction: "up" | "down" }
   | { action: "setStepOrder"; parentItemId: string; stepId: string; newIndex: number }
@@ -79,7 +79,7 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
       return updateRelationship(payload.parentLevelId, payload.parentItemId, payload.childItemId, payload.published);
 
     case "addStep":
-      return addStep(payload.parentItemId, payload.title, payload.contentHtml, payload.imageDataUrl, payload.videoUrl, modifiedBy);
+      return addStep(payload.parentItemId, payload.title, payload.contentHtml, payload.imageDataUrls, payload.videoUrl, modifiedBy);
 
     case "updateStep":
       return updateStep(
@@ -88,7 +88,7 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
         {
           title: payload.title,
           contentHtml: payload.contentHtml,
-          imageDataUrl: payload.imageDataUrl,
+          imageDataUrls: payload.imageDataUrls,
           videoUrl: payload.videoUrl,
         },
         modifiedBy,
