@@ -12,8 +12,7 @@
     "lint": "next lint",
     "dev:staging": "dotenv -e .env.staging.local -- next dev",
     "seed-admins": "node --env-file=.env.local scripts/seed-admins.js",
-    "seed-content": "node --env-file=.env.local scripts/seed-content.js",
-    "remove-old-paper-data": "node --env-file=.env.local scripts/remove-old-paper-data.js"
+    "seed-content": "node --env-file=.env.local scripts/seed-content.js"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",

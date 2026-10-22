@@ -362,8 +362,8 @@ function StepImage({ src, alt, onClick }: { src: string; alt: string; onClick: (
 // MUI's own Accordion nests the heading inside the button, which drops its
 // heading role, so this is built directly.
 
-function AccordionSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function AccordionSection({ title, defaultOpen, children }: { title: string; defaultOpen: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
   const baseId = useId();
   return (
     <Card sx={{ borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden", mb: 2 }}>
@@ -692,10 +692,12 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     </Tooltip>
   );
 
-  // An accordion entry: the main item, with its sub-items nested beneath it
+  // An accordion entry: the main item, with its sub-items nested beneath it.
+  // A short list (three entries or fewer) starts fully open; a longer one starts collapsed.
   function renderAccordion(groups: StepGroup[]) {
+    const startOpen = groups.length <= 3;
     return groups.map((group) => (
-      <AccordionSection key={group.main.id} title={group.main.title || "Untitled"}>
+      <AccordionSection key={group.main.id} title={group.main.title || "Untitled"} defaultOpen={startOpen}>
         {renderStepBody(group.main)}
         {group.subSteps.map((sub) => (
           <Box key={sub.id} sx={{ mt: 3, pl: 2, borderLeft: `3px solid ${colors.lightBorder}` }}>

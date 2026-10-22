@@ -1,6 +1,6 @@
 # GraphicDesign restructure: plan and progress log
 
-Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 to 4 are on `Staging-GraphicDesign`. The accordion heading fix and the old-Paper-data cleanup script are committed locally and not yet on Staging.
+Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 to 4 are on `Staging-GraphicDesign`. The accordion heading fix and the open-when-short accordion change are the latest commits.
 
 ## Ground rules
 - Build on a branch based on `Staging-GraphicDesign`. Never push to `main`. Confirm before any push (see CLAUDE.md on Staging).
@@ -85,12 +85,9 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 t
 - Visual Arts `main` has no tab component on its steps page.
 
 ## Open items
-- **Remove the old Paper data (needs the user to run it).** The old Paper items live under `items/level_2`, which is now the **Products** level, so they can appear as Products until removed. Run the cleanup script with a cutoff date (see below).
+- **Old Paper data:** old Paper items live under `items/level_2`, which is now the **Products** level, so they can appear as Products. The user chose not to use a cleanup script and will deal with it themselves (the script was written, tested and then dropped).
 - Decided with the user: a product opens on **Printer Overview** the first time it is opened in a browser session (when it has an overview), and on Steps after that. A `?tab=` link always wins. Tracked per product in `sessionStorage`, like the safety pop-up.
-- Choices awaiting confirmation: accordions start collapsed; the "!" button sits inside the Printer Overview tab.
+- Decided with the user: accordions start fully open when a list has three entries or fewer, and collapsed when it has more. The "!" button stays inside the Printer Overview tab.
 - Staging and main share one Firestore database (`path-ci-graphicdesign`). Content edits in staging also show on main. A separate staging database was discussed and not yet decided.
 - Backporting to the other PATH apps (especially PATH-Template) is parked for later.
 - Before any push: ask first (Staging only).
-
-### Removing the old Paper data
-`npm run remove-old-paper-data -- --before=YYYY-MM-DD` is a dry run that lists what would be deleted. Add `--apply` to delete. The cutoff date should be after the last Paper was created and before the first new Product was, so new Products are kept. The script deletes old Paper items under `level_2`, the printer-to-paper links and paper-to-product links, and soft-deleted Papers. It leaves Printers, steps, the old level_3 Products (now unreachable) and Storage files alone.
