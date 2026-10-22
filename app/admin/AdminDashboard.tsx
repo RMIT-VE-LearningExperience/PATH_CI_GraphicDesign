@@ -251,9 +251,9 @@ export default function AdminDashboard() {
     defaultParentStepId?: string | null;
   } | null>(null);
   const [stepTab, setStepTab] = useState<StepSection>("steps");
-  // Renaming a tab in place: which tab is being renamed, and the name typed so far
-  const [editingTab, setEditingTab] = useState<StepSection | null>(null);
-  const [tabDraft, setTabDraft] = useState("");
+  // Edit mode for the tab names: one pencil switches every tab into a text field
+  const [editingTabs, setEditingTabs] = useState(false);
+  const [tabDrafts, setTabDrafts] = useState<Record<StepSection, string>>(DEFAULT_STEP_TAB_LABELS);
   const [blockedConversion, setBlockedConversion] = useState<{ stepTitle: string; subStepTitles: string[] } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [infoOpen, setInfoOpen] = useState<{ item: Item | Step; isStep?: boolean } | null>(null);
@@ -667,23 +667,42 @@ export default function AdminDashboard() {
     }
   }
 
-  function startRenamingTab(section: StepSection) {
-    setEditingTab(section);
-    setTabDraft(tabLabels[section]);
+  function leaveTabEditMode() {
+    setEditingTabs(false);
+    // Hand focus back to the pencil, which the tick and X were next to
+    setTimeout(() => document.getElementById("rename-tabs-button")?.focus(), 0);
   }
 
-  function cancelRenamingTab() {
-    setEditingTab(null);
+  function startEditingTabs() {
+    setTabDrafts({ ...tabLabels });
+    setEditingTabs(true);
   }
 
-  async function saveTabName() {
-    if (!editingTab) return;
-    const name = tabDraft.trim();
-    if (!name) return;
-    if (name === tabLabels[editingTab]) { setEditingTab(null); return; }
-    // Only this tab's name is sent; the others keep their saved names
-    const ns = await dispatch("updateAppSettings", { settings: { stepTabs: { [editingTab]: name } } });
-    if (ns) { setEditingTab(null); showAlert("Tab name saved"); }
+  async function saveTabNames() {
+    const changed: Partial<Record<StepSection, string>> = {};
+    for (const section of STEP_SECTIONS) {
+      const name = tabDrafts[section].trim();
+      if (!name) return; // every tab needs a name
+      if (name !== tabLabels[section]) changed[section] = name;
+    }
+    if (Object.keys(changed).length === 0) { leaveTabEditMode(); return; }
+    // Only the tabs that changed are sent; the names apply to every product
+    const ns = await dispatch("updateAppSettings", { settings: { stepTabs: changed } });
+    if (ns) { leaveTabEditMode(); showAlert("Tab names saved"); }
+  }
+
+  function handleStepTabKeyDown(e: React.KeyboardEvent) {
+    if (!(e.target as HTMLElement).matches("[role=tab]")) return;
+    const index = STEP_SECTIONS.indexOf(stepTab);
+    let next = -1;
+    if (e.key === "ArrowRight") next = (index + 1) % STEP_SECTIONS.length;
+    else if (e.key === "ArrowLeft") next = (index - 1 + STEP_SECTIONS.length) % STEP_SECTIONS.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = STEP_SECTIONS.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    setStepTab(STEP_SECTIONS[next]);
+    document.getElementById(`step-tab-${STEP_SECTIONS[next]}`)?.focus();
   }
 
   async function handleDragEnd(result: DropResult) {
@@ -1169,85 +1188,97 @@ export default function AdminDashboard() {
           Steps: {parentEntry.itemName}
         </Typography>
 
-        {/* Tabs. The pencil renames a tab in place; the name applies to every product in the app. */}
-        {/* A group of toggle buttons rather than a tab list: each tab has a pencil button beside it, which a tab list does not allow */}
-        <Box
-          role="group"
-          aria-label="Sections of this product"
-          sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, mb: 2, borderBottom: 1, borderColor: "divider" }}
-        >
-          {STEP_SECTIONS.map((section) => {
-            const selected = stepTab === section;
-            if (editingTab === section) {
-              return (
-                <Box key={section} sx={{ display: "flex", alignItems: "center", gap: 0.5, py: 0.75 }}>
-                  <TextField
-                    size="small"
-                    autoFocus
-                    value={tabDraft}
-                    onChange={(e) => setTabDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); void saveTabName(); }
-                      else if (e.key === "Escape") { e.stopPropagation(); cancelRenamingTab(); }
-                    }}
-                    inputProps={{ maxLength: STEP_TAB_LABEL_MAX_LENGTH, "aria-label": `New name for the ${tabLabels[section]} tab. Press Enter to save or Escape to cancel.` }}
-                    error={!tabDraft.trim()}
-                    sx={{ width: 200 }}
-                  />
-                  <IconButton
-                    size="small"
-                    onClick={() => void saveTabName()}
-                    disabled={!tabDraft.trim() || actionLoading}
-                    aria-label="Save tab name"
-                    title="Save"
-                    sx={{ color: "#000054" }}
-                  >
-                    <CheckIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={cancelRenamingTab}
-                    aria-label="Cancel renaming"
-                    title="Cancel"
-                    sx={{ color: "#45443F" }}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              );
-            }
-            return (
-              <Box
-                key={section}
-                sx={{ display: "flex", alignItems: "center", mb: "-1px", borderBottom: "2px solid", borderColor: selected ? "#000054" : "transparent" }}
-              >
-                <ButtonBase
-                  id={`step-tab-${section}`}
-                  aria-pressed={selected}
-                  onClick={() => setStepTab(section)}
-                  sx={{
-                    pl: 2, pr: 0.5, py: 1.5, fontFamily: "inherit", fontSize: "0.875rem", fontWeight: 600,
-                    color: selected ? "#000054" : "#45443F",
-                    "&:focus-visible": { outline: "3px solid #000054", outlineOffset: -3 },
+        {/* Tabs. The pencil at the far right switches every tab into edit mode; the tick and X appear beside it. */}
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 2, borderBottom: 1, borderColor: "divider" }}>
+          {editingTabs ? (
+            <Box
+              role="group"
+              aria-label="Rename the tabs"
+              sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, py: 0.75, minWidth: 0, flex: 1 }}
+            >
+              {STEP_SECTIONS.map((section, i) => (
+                <TextField
+                  key={section}
+                  size="small"
+                  autoFocus={i === 0}
+                  value={tabDrafts[section]}
+                  onChange={(e) => setTabDrafts((prev) => ({ ...prev, [section]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void saveTabNames(); }
+                    else if (e.key === "Escape") { e.stopPropagation(); leaveTabEditMode(); }
                   }}
-                >
-                  {tabLabels[section]} ({stepsFor(section).filter((x) => x.stepType === "main").length})
-                </ButtonBase>
+                  inputProps={{ maxLength: STEP_TAB_LABEL_MAX_LENGTH, "aria-label": `Name of the ${tabLabels[section]} tab` }}
+                  error={!tabDrafts[section].trim()}
+                  sx={{ flex: { xs: "1 1 100%", sm: "1 1 150px" }, minWidth: 0, maxWidth: { sm: 260 } }}
+                />
+              ))}
+            </Box>
+          ) : (
+            <Box role="tablist" aria-label="Sections of this product" onKeyDown={handleStepTabKeyDown} sx={{ display: "flex", flexWrap: "wrap", minWidth: 0 }}>
+              {STEP_SECTIONS.map((section) => {
+                const selected = stepTab === section;
+                return (
+                  <ButtonBase
+                    key={section}
+                    role="tab"
+                    id={`step-tab-${section}`}
+                    aria-selected={selected}
+                    aria-controls={selected ? `step-tabpanel-${section}` : undefined}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setStepTab(section)}
+                    sx={{
+                      px: 2, py: 1.5, mb: "-1px", fontFamily: "inherit", fontSize: "0.875rem", fontWeight: 600,
+                      color: selected ? "#000054" : "#45443F",
+                      borderBottom: "2px solid", borderColor: selected ? "#000054" : "transparent",
+                      "&:focus-visible": { outline: "3px solid #000054", outlineOffset: -3 },
+                    }}
+                  >
+                    {tabLabels[section]} ({stepsFor(section).filter((x) => x.stepType === "main").length})
+                  </ButtonBase>
+                );
+              })}
+            </Box>
+          )}
+
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+            {editingTabs && (
+              <>
                 <IconButton
                   size="small"
-                  onClick={() => startRenamingTab(section)}
-                  aria-label={`Rename the ${tabLabels[section]} tab`}
-                  title="Rename this tab (applies to every product)"
-                  sx={{ color: "#45443F", mr: 0.5 }}
+                  onClick={() => void saveTabNames()}
+                  disabled={actionLoading || STEP_SECTIONS.some((section) => !tabDrafts[section].trim())}
+                  aria-label="Save tab names"
+                  title="Save"
+                  sx={{ color: "#1B6E3B" }}
                 >
-                  <EditIcon sx={{ fontSize: 16 }} />
+                  <CheckIcon fontSize="small" />
                 </IconButton>
-              </Box>
-            );
-          })}
+                <IconButton
+                  size="small"
+                  onClick={leaveTabEditMode}
+                  aria-label="Cancel renaming the tabs"
+                  title="Cancel"
+                  sx={{ color: "#45443F" }}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </>
+            )}
+            <IconButton
+              id="rename-tabs-button"
+              size="small"
+              onClick={() => (editingTabs ? leaveTabEditMode() : startEditingTabs())}
+              aria-label="Rename the tabs"
+              aria-pressed={editingTabs}
+              title="Rename the tabs (applies to every product)"
+              sx={{ color: "#000054", bgcolor: editingTabs ? "rgba(0,0,84,0.12)" : "transparent" }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
 
-        <Box role="region" id={`step-tabpanel-${stepTab}`} aria-labelledby={`step-tab-${stepTab}`}>
+        <Box role={editingTabs ? undefined : "tabpanel"} id={`step-tabpanel-${stepTab}`} aria-labelledby={editingTabs ? undefined : `step-tab-${stepTab}`}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 3 }}>
           <Typography variant="body2" color="text.secondary">
             {stepTab === "overview"

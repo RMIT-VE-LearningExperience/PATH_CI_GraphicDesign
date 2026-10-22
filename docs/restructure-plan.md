@@ -76,7 +76,7 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 t
    - Mobile (375px): no horizontal scroll and no touch targets under 24px on the overview, steps and appendix tabs, and the pop-up.
    - Not covered: a real screen-reader pass and testing against the live database.
 7. [x] Follow-up changes after review (committed locally, not yet pushed):
-   - Admin: tab names are renamed in place (pencil beside each tab, Enter or tick saves, Esc or X cancels). Only the renamed tab is saved. The "Edit tab names" pop-up was removed. The tab row is now a group of toggle buttons rather than a tab list, because a tab list cannot hold the pencil buttons.
+   - Admin: tab names are renamed with one pencil at the far right of the tab row. It puts every tab into edit mode (each tab becomes a text field) and a tick and an X appear beside it. Tick or Enter saves only the names that changed; X, Esc or the pencil again cancels; blank names are blocked. The pencil sits outside the tab list, so the tabs are real tabs again, with arrow-key navigation. The "Edit tab names" pop-up was removed.
    - Editor: Increase and Decrease indent buttons. Plain text indents up to 3 levels (blockquote); a list item nests its list. The browser's invalid nested-list output is repaired. The public page allows blockquote, strips its inline styles and styles it itself.
    - Public: on Printer Overview and Appendix the footer is pinned to the bottom of the window, so it does not jump when an accordion closes. The Steps tab is unchanged.
    - Public: the safety "!" button has no ring and sits at the left edge of the content.
