@@ -70,7 +70,7 @@ export type DeletedItem = {
   type: string;        // levelId or "step"
   parentId?: string;   // for steps: the parent item ID
   name: string;
-  location?: string;   // human-readable origin path, e.g. "Printer → Paper"
+  location?: string;   // human-readable origin path, e.g. "Printer → Product"
   deletedAt: Date;
   deletedBy: string;
   data: Record<string, unknown>;

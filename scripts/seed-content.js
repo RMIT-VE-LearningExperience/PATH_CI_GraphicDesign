@@ -37,11 +37,12 @@ const app = initializeApp({ credential: loadCredential() });
 const databaseId = process.env.FIREBASE_DATABASE_ID || "(default)";
 const db = getFirestore(app, databaseId);
 
+// Printer > Product > Steps. Products are type2 (created under each printer, with their
+// own settings), so there is no shared "Paper Type" level.
 const hierarchy = {
   levels: [
     { id: "level_1", name: "Printers", singularName: "Printer", type: null,    enabled: true, order: 1 },
-    { id: "level_2", name: "Papers",   singularName: "Paper",   type: "type1", enabled: true, order: 2 },
-    { id: "level_3", name: "Products", singularName: "Product", type: "type2", enabled: true, order: 3 },
+    { id: "level_2", name: "Products", singularName: "Product", type: "type2", enabled: true, order: 2 },
   ],
 };
 
