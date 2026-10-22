@@ -50,6 +50,14 @@ type ActionPayload =
   | { action: "updateAppSettings"; settings: Partial<AppSettings> }
   | { action: "applyAltText"; entries: AltTextEntry[] };
 
+// A browser tab opened before the multi-image release still sends the old
+// single `imageDataUrl` field. Accept it so such a tab does not fail until it is reloaded.
+function legacyImages(payload: { imageDataUrls?: string[]; imageDataUrl?: string }): string[] | undefined {
+  if (Array.isArray(payload.imageDataUrls)) return payload.imageDataUrls;
+  if (typeof payload.imageDataUrl === "string") return payload.imageDataUrl ? [payload.imageDataUrl] : [];
+  return undefined;
+}
+
 async function executeAction(payload: ActionPayload, modifiedBy: string): Promise<TutorialState> {
   switch (payload.action) {
     case "addItem":
@@ -81,7 +89,7 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
       return updateRelationship(payload.parentLevelId, payload.parentItemId, payload.childItemId, payload.published);
 
     case "addStep":
-      return addStep(payload.parentItemId, payload.title, payload.contentHtml, payload.imageDataUrls, payload.videoUrl, payload.stepType, payload.parentStepId, modifiedBy);
+      return addStep(payload.parentItemId, payload.title, payload.contentHtml, legacyImages(payload) ?? [], payload.videoUrl, payload.stepType, payload.parentStepId, modifiedBy);
 
     case "updateStep":
       return updateStep(
@@ -90,7 +98,7 @@ async function executeAction(payload: ActionPayload, modifiedBy: string): Promis
         {
           title: payload.title,
           contentHtml: payload.contentHtml,
-          imageDataUrls: payload.imageDataUrls,
+          imageDataUrls: legacyImages(payload),
           videoUrl: payload.videoUrl,
           stepType: payload.stepType,
           parentStepId: payload.parentStepId,
