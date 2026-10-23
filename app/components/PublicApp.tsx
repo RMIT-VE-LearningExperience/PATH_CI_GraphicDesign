@@ -116,6 +116,16 @@ function sanitizeHtml(html: string): string {
     });
 }
 
+// The editor leaves a lone <br>, an empty paragraph or &nbsp; behind when its text is cleared. That has
+// no visible content, so it must not render an empty block with spacing around it.
+function hasVisibleContent(html: string): boolean {
+  const text = html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;|&#160;|\u00a0/gi, " ")
+    .trim();
+  return text.length > 0;
+}
+
 // ── Skip link ─────────────────────────────────────────────────────────
 // Hidden until focused, so keyboard users can jump past the preview banner
 // and top navigation straight to the main content of the current view.
@@ -678,9 +688,10 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   function renderStepBody(step: Step) {
     const embedUrl = step.videoUrl ? getVideoEmbedUrl(step.videoUrl) : null;
     const isDirectVideo = /\.(mp4|webm|ogg)(\?.*)?$/i.test(step.videoUrl ?? "");
+    const safeHtml = step.contentHtml ? sanitizeHtml(step.contentHtml) : "";
     return (
       <>
-    {step.contentHtml && (
+    {hasVisibleContent(safeHtml) && (
       <Box
         sx={{
           fontSize: { xs: "0.95rem", sm: "1rem" }, color: colors.text, lineHeight: 1.6,
@@ -690,7 +701,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           "& strong, & b": { fontWeight: 700 }, "& em, & i": { fontStyle: "italic" },
           "& a": { color: colors.primary, textDecoration: "underline", "&:hover": { opacity: 0.8 } },
         }}
-        dangerouslySetInnerHTML={{ __html: sanitizeHtml(step.contentHtml) }}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     )}
 

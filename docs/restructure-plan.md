@@ -94,6 +94,8 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Everything
    - Up/down arrows (Previous section / Next section, as in PATH-Apparel) on the Overview and Appendix tabs only. They step through the sections that are visible (a closed entry's sub-items are skipped), do not open what they land on, use `replaceState` for the hash (no history entries), are real links, and are disabled at the ends. They sit in a "Page shortcuts" landmark above the back-to-top button.
    - Steps tab: the same Previous step / Next step arrows. Every step card has an anchor id (`step-2`, `step-2-1`, matching the 2 and 2.1 numbering), a link such as `#step-2-1` opens the Steps tab and scrolls to it, and the card takes focus. The arrows are hidden when a product has only one step. They sit above the back-to-top button without overlapping it on a 375px screen.
 
+10. [x] Bug fix (committed locally, not yet pushed): an entry whose text had been cleared in the editor (a lone `<br>`, an empty paragraph or `&nbsp;`) rendered an empty block with spacing, so one accordion entry's panel was taller than another's. Content with no visible text is no longer rendered, in every tab and in the safety pop-up.
+
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.
 - Level `enabled` flag exists, and the app already skips disabled levels.
