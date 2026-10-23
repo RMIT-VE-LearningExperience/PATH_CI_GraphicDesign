@@ -38,6 +38,7 @@ import {
   Home as HomeIcon,
   Image as ImageIcon,
   Info as InfoIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
   Remove as RemoveIcon,
 } from "@mui/icons-material";
@@ -366,21 +367,46 @@ function StepImage({ src, alt, onClick }: { src: string; alt: string; onClick: (
 // MUI's own Accordion nests the heading inside the button, which drops its
 // heading role, so this is built directly.
 
-function AccordionSection({ title, defaultOpen, children }: { title: string; defaultOpen: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
-  const baseId = useId();
+type AccordionAnchor = { id: string; stepId: string; parentStepId: string | null };
+const NO_ANCHORS: AccordionAnchor[] = [];
+
+// Gap left between the sticky strip (title + tabs) and a section it has been scrolled to
+const ANCHOR_GAP = 16;
+
+type AccordionProps = {
+  anchorId: string;
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  // "main" is a full-width card; "sub" is a smaller box nested inside its parent's panel
+  level: "main" | "sub";
+  // How far to keep this section below the top of the window when scrolled to (the sticky strip's height)
+  scrollMargin: number;
+  children: React.ReactNode;
+};
+
+function AccordionSection({ anchorId, title, open, onToggle, level, scrollMargin, children }: AccordionProps) {
+  const isSub = level === "sub";
   return (
-    <Card sx={{ borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden", mb: 2 }}>
-      <Typography component="h2" sx={{ m: 0, fontSize: "inherit" }}>
+    <Card
+      id={anchorId}
+      sx={{
+        borderRadius: "8px", overflow: "hidden", scrollMarginTop: `${scrollMargin}px`,
+        ...(isSub
+          ? { mt: 2, backgroundColor: colors.lightBg, border: `1px solid ${colors.lightBorder}`, boxShadow: "none" }
+          : { mb: 2, backgroundColor: colors.cardBg, border: "none", boxShadow: colors.cardShadow }),
+      }}
+    >
+      <Typography component={isSub ? "h3" : "h2"} sx={{ m: 0, fontSize: "inherit" }}>
         <ButtonBase
-          id={`${baseId}-header`}
+          id={`${anchorId}-header`}
           aria-expanded={open}
-          aria-controls={`${baseId}-panel`}
-          onClick={() => setOpen((o) => !o)}
+          aria-controls={`${anchorId}-panel`}
+          onClick={onToggle}
           sx={{
-            width: "100%", minHeight: 56, px: { xs: 2.5, sm: 3.5 }, py: 1.5,
+            width: "100%", minHeight: isSub ? 48 : 56, px: isSub ? { xs: 2, sm: 2.5 } : { xs: 2.5, sm: 3.5 }, py: isSub ? 1 : 1.5,
             display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, textAlign: "left",
-            fontFamily: "inherit", fontSize: { xs: "1.05rem", sm: "1.2rem" }, fontWeight: 700, color: colors.primary,
+            fontFamily: "inherit", fontSize: isSub ? { xs: "1rem", sm: "1.1rem" } : { xs: "1.05rem", sm: "1.2rem" }, fontWeight: 700, color: colors.primary,
             "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: -3 },
           }}
         >
@@ -389,7 +415,12 @@ function AccordionSection({ title, defaultOpen, children }: { title: string; def
         </ButtonBase>
       </Typography>
       <Collapse in={open} timeout="auto" unmountOnExit={false}>
-        <Box id={`${baseId}-panel`} role="region" aria-labelledby={`${baseId}-header`} sx={{ px: { xs: 2.5, sm: 3.5 }, pb: { xs: 2.5, sm: 3.5 } }}>
+        <Box
+          id={`${anchorId}-panel`}
+          role="region"
+          aria-labelledby={`${anchorId}-header`}
+          sx={isSub ? { px: { xs: 2, sm: 2.5 }, pb: { xs: 2, sm: 2.5 } } : { px: { xs: 2.5, sm: 3.5 }, pb: { xs: 2.5, sm: 3.5 } }}
+        >
           {children}
         </Box>
       </Collapse>
@@ -446,6 +477,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [enlargedGallery]);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const selectionStackRef = useRef<NavEntry[]>([]);
+  selectionStackRef.current = selectionStack;
 
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
   const visibleStepsRef = useRef(new Map<number, number>());
@@ -726,25 +759,186 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     </Tooltip>
   );
 
-  // An accordion entry: the main item, with its sub-items nested beneath it.
-  // A short list (three entries or fewer) starts fully open; a longer one starts collapsed.
-  function renderAccordion(groups: StepGroup[]) {
-    const startOpen = groups.length <= 3;
-    return groups.map((group) => (
-      <AccordionSection key={group.main.id} title={group.main.title || "Untitled"} defaultOpen={startOpen}>
-        {renderStepBody(group.main)}
-        {group.subSteps.map((sub) => (
-          <Box key={sub.id} sx={{ mt: 3, pl: 2, borderLeft: `3px solid ${colors.lightBorder}` }}>
-            {sub.title && (
-              <Typography component="h3" sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, fontWeight: 700, color: colors.primary, mb: 1.5 }}>
-                {sub.title}
-              </Typography>
-            )}
-            {renderStepBody(sub)}
-          </Box>
-        ))}
-      </AccordionSection>
-    ));
+  // ── Accordion anchors, open state and up/down navigation ─────────────
+  // Every entry and sub-item in Printer Overview and Appendix has an id such as
+  // "appendix-2" or "appendix-2-1". A link to one opens its tab and the sections
+  // around it and scrolls to it, and the arrows step through them in order.
+
+  const accordionTab: "overview" | "appendix" | null = activeTab === "overview" || activeTab === "appendix" ? activeTab : null;
+
+  // Open or closed, by step id. Anything not listed follows the default: three entries or fewer
+  // start open, and so do three sub-items or fewer under one entry.
+  const [accordionOverrides, setAccordionOverrides] = useState<Record<string, boolean>>({});
+  const isAccordionOpen = (stepId: string, defaultOpen: boolean) => accordionOverrides[stepId] ?? defaultOpen;
+  const setAccordionOpen = (stepId: string, open: boolean) => setAccordionOverrides((prev) => ({ ...prev, [stepId]: open }));
+
+  const accordionAnchors = useMemo(() => {
+    if (!accordionTab) return NO_ANCHORS;
+    const anchors: AccordionAnchor[] = [];
+    sectionGroups[accordionTab].forEach((group, i) => {
+      anchors.push({ id: `${accordionTab}-${i + 1}`, stepId: group.main.id, parentStepId: null });
+      group.subSteps.forEach((sub, j) => anchors.push({ id: `${accordionTab}-${i + 1}-${j + 1}`, stepId: sub.id, parentStepId: group.main.id }));
+    });
+    return anchors;
+  }, [accordionTab, sectionGroups]);
+
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  // The sticky strip's height (plus the preview banner when shown), so a section scrolled to
+  // sits just below it, whatever the screen size
+  const [stripHeight, setStripHeight] = useState(0);
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || !atSteps) return;
+    const measure = () => setStripHeight(Math.round(strip.getBoundingClientRect().height));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [atSteps, activeTab, visibleTabs.length]);
+  const anchorScrollMargin = stripHeight + (isPreviewMode ? 36 : 0) + ANCHOR_GAP;
+  const [anchorView, setAnchorView] = useState<{ active: string | null; visible: string[] }>({ active: null, visible: [] });
+  // The section we last scrolled to on purpose. Near the end of a page it cannot always reach the top of the
+  // window, so it stays the "current" one until the reader scrolls or presses a key themselves.
+  const arrivedAtRef = useRef<string | null>(null);
+  const arrivedYRef = useRef<number | null>(null); // scroll position once the move has settled
+  const settleUntilRef = useRef(0); // while a scroll we started is still running
+
+  // Which anchor the reader is at (the last one above the sticky strip) and which ones are on the page
+  // right now (those inside a closed section are not)
+  useEffect(() => {
+    if (!atSteps || accordionAnchors.length === 0) {
+      setAnchorView((prev) => (prev.active === null && prev.visible.length === 0 ? prev : { active: null, visible: [] }));
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const threshold = (stripRef.current?.getBoundingClientRect().bottom ?? 0) + ANCHOR_GAP + 8;
+      const visible: string[] = [];
+      let active: string | null = null;
+      for (const anchor of accordionAnchors) {
+        const el = document.getElementById(anchor.id);
+        if (!el || getComputedStyle(el).visibility === "hidden") continue;
+        visible.push(anchor.id);
+        if (el.getBoundingClientRect().top <= threshold) active = anchor.id;
+      }
+      // Once our own scroll has settled, remember where it ended. If the reader later ends up somewhere else
+      // (scrollbar, back to top, a link), they are no longer "at" the section we scrolled to.
+      if (arrivedAtRef.current && performance.now() >= settleUntilRef.current) {
+        if (arrivedYRef.current === null) arrivedYRef.current = window.scrollY;
+        else if (Math.abs(window.scrollY - arrivedYRef.current) > 40) arrivedAtRef.current = null;
+      }
+      if (arrivedAtRef.current && visible.includes(arrivedAtRef.current)) active = arrivedAtRef.current;
+      setAnchorView((prev) => (prev.active === active && prev.visible.join("|") === visible.join("|") ? prev : { active, visible }));
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    // The reader taking over (wheel, touch or keys) ends the "arrived on purpose" state
+    const takeOver = () => { arrivedAtRef.current = null; schedule(); };
+    update();
+    window.addEventListener("wheel", takeOver, { passive: true });
+    window.addEventListener("touchmove", takeOver, { passive: true });
+    window.addEventListener("keydown", takeOver);
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    // Sections change height as they open and close, so measure again once that settles
+    const timer = window.setTimeout(update, 400);
+    return () => {
+      window.removeEventListener("wheel", takeOver);
+      window.removeEventListener("touchmove", takeOver);
+      window.removeEventListener("keydown", takeOver);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      window.clearTimeout(timer);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [atSteps, accordionAnchors, accordionOverrides]);
+
+  // Scroll to an anchor. The sections around it always open. The section itself opens only when the
+  // reader followed a link to it, not when they stepped to it with the arrows.
+  function goToAnchor(anchorId: string, openTarget: boolean) {
+    const anchor = accordionAnchors.find((a) => a.id === anchorId);
+    if (!anchor) return;
+    if (anchor.parentStepId) setAccordionOpen(anchor.parentStepId, true);
+    if (openTarget) setAccordionOpen(anchor.stepId, true);
+    arrivedAtRef.current = anchorId;
+    arrivedYRef.current = null;
+    settleUntilRef.current = performance.now() + 1200;
+    // Look again once the smooth scroll has finished
+    window.setTimeout(() => window.dispatchEvent(new Event("scroll")), 1300);
+    // A short page may not scroll at all, so mark where we are now rather than waiting for a scroll event
+    setAnchorView((prev) => (prev.active === anchorId ? prev : { ...prev, active: anchorId }));
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.setTimeout(() => {
+      const el = document.getElementById(anchorId);
+      if (!el) return;
+      el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      document.getElementById(`${anchorId}-header`)?.focus({ preventScroll: true });
+      // Keep the address pointing at this section, without adding a history entry
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}#${anchorId}`);
+    }, 60);
+  }
+
+  // A link such as #appendix-2-1, on load or typed in later, opens its tab and goes to the section
+  const hashTargetRef = useRef<string | null>(null);
+  const [hashTick, setHashTick] = useState(0);
+  useEffect(() => {
+    const read = () => {
+      const hash = window.location.hash.slice(1);
+      if (/^(overview|appendix)-\d+(-\d+)?$/.test(hash)) { hashTargetRef.current = hash; setHashTick((n) => n + 1); }
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  useEffect(() => {
+    const target = hashTargetRef.current;
+    if (!target || !atSteps || !productId) return;
+    const tab = target.split("-")[0] as "overview" | "appendix";
+    if (!visibleTabs.includes(tab)) return;
+    if (activeTab !== tab) { setTabChoice({ itemId: productId, tab }); return; }
+    if (!accordionAnchors.some((a) => a.id === target)) { hashTargetRef.current = null; return; }
+    hashTargetRef.current = null;
+    goToAnchor(target, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hashTick, atSteps, productId, visibleTabs, activeTab, accordionAnchors]);
+
+  const anchorIndex = anchorView.visible.indexOf(anchorView.active ?? "");
+  const previousAnchor = anchorIndex > 0 ? anchorView.visible[anchorIndex - 1] : null;
+  const nextAnchor = anchorIndex + 1 < anchorView.visible.length ? anchorView.visible[anchorIndex + 1] : null;
+
+  // An accordion entry: the main item, with its sub-items as boxes of their own beneath it
+  function renderAccordion(groups: StepGroup[], tab: "overview" | "appendix") {
+    const mainsOpen = groups.length <= 3;
+    return groups.map((group, i) => {
+      const subsOpen = group.subSteps.length <= 3;
+      return (
+        <AccordionSection
+          key={group.main.id}
+          level="main"
+          scrollMargin={anchorScrollMargin}
+          anchorId={`${tab}-${i + 1}`}
+          title={group.main.title || "Untitled"}
+          open={isAccordionOpen(group.main.id, mainsOpen)}
+          onToggle={() => setAccordionOpen(group.main.id, !isAccordionOpen(group.main.id, mainsOpen))}
+        >
+          {renderStepBody(group.main)}
+          {group.subSteps.map((sub, j) => (
+            <AccordionSection
+              key={sub.id}
+              level="sub"
+              scrollMargin={anchorScrollMargin}
+              anchorId={`${tab}-${i + 1}-${j + 1}`}
+              title={sub.title || "Untitled"}
+              open={isAccordionOpen(sub.id, subsOpen)}
+              onToggle={() => setAccordionOpen(sub.id, !isAccordionOpen(sub.id, subsOpen))}
+            >
+              {renderStepBody(sub)}
+            </AccordionSection>
+          ))}
+        </AccordionSection>
+      );
+    });
   }
 
   // Name of whatever the user is looking at now, for the document title
@@ -902,6 +1096,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   useEffect(() => {
     if (!state) return;
     function onPopState() {
+      // Moving between sections with a #hash changes only the hash; the page itself has not changed
+      if (window.location.pathname === resolvePathFromIds(selectionStackRef.current, state!)) return;
       const slugParts = window.location.pathname.split("/").filter(Boolean);
       const levels = (state!.hierarchy.levels ?? [])
         .filter((l) => l.enabled)
@@ -1355,7 +1551,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     }
 
     return (
-      <Box sx={{ minHeight: "100vh", bgcolor: colors.lightBg, ...(activeTab === "steps" ? {} : { display: "flex", flexDirection: "column" }) }}>
+      <Box sx={{ minHeight: "100vh", "@supports (min-height: 100dvh)": { minHeight: "100dvh" }, bgcolor: colors.lightBg, display: "flex", flexDirection: "column" }}>
         <SkipLink />
         {previewBanner}
         <Box sx={{ height: 3, bgcolor: colors.primary, mt: isPreviewMode ? "36px" : 0 }} />
@@ -1383,6 +1579,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
             <Box component="main" id="main-content" ref={mainRef} tabIndex={-1} sx={mainFocusSx}>
 
               <Box
+                ref={stripRef}
                 sx={{
                   position: "sticky",
                   top: isPreviewMode ? "36px" : 0,
@@ -1474,7 +1671,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   sx={{ pb: { xs: 6, sm: 8 } }}
                 >
                   {sectionGroups.safety.length > 0 && <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 1 }}>{safetyButton}</Box>}
-                  {renderAccordion(sectionGroups.overview)}
+                  {renderAccordion(sectionGroups.overview, "overview")}
                 </Box>
               )}
 
@@ -1485,7 +1682,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   aria-labelledby={visibleTabs.length > 1 ? "step-tab-appendix" : undefined}
                   sx={{ pb: { xs: 6, sm: 8 } }}
                 >
-                  {renderAccordion(sectionGroups.appendix)}
+                  {renderAccordion(sectionGroups.appendix, "appendix")}
                 </Box>
               )}
 
@@ -1540,8 +1737,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           </Container>
         </Box>
 
-        {/* On Overview and Appendix the footer is pushed to the bottom of the window, so it does not jump when an accordion closes */}
-        <Box sx={{ mt: activeTab === "steps" ? 0 : "auto" }}>
+        {/* The footer is pushed to the bottom of the window on every tab, so it neither floats under short content nor jumps when an accordion closes */}
+        <Box sx={{ mt: "auto" }}>
           <Footer year={new Date().getFullYear()} isAdmin={false} />
         </Box>
 
@@ -1700,6 +1897,37 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
           </Box>
         </Modal>
 
+        {/* Floating shortcuts sit in a landmark so no content is outside one */}
+        <Box component="nav" aria-label="Page shortcuts">
+        {accordionTab && anchorView.visible.length > 1 && (
+          <Stack spacing={1} sx={{ position: "fixed", bottom: 128, right: 24, zIndex: 20, "@media print": { display: "none" } }}>
+            {([
+              { label: "Previous section", target: previousAnchor, Icon: KeyboardArrowUpIcon },
+              { label: "Next section", target: nextAnchor, Icon: KeyboardArrowDownIcon },
+            ] as const).map(({ label, target, Icon }) => (
+              <Fab
+                key={label}
+                component="a"
+                href={target ? `#${target}` : undefined}
+                size="small"
+                aria-label={label}
+                aria-disabled={!target}
+                tabIndex={target ? 0 : -1}
+                onClick={(e: React.MouseEvent) => { e.preventDefault(); if (target) goToAnchor(target, false); }}
+                sx={{
+                  bgcolor: target ? colors.primary : colors.lightBorder,
+                  color: target ? "#ffffff" : colors.lightText,
+                  pointerEvents: target ? "auto" : "none",
+                  "&:hover": { bgcolor: target ? colors.darkBg : colors.lightBorder },
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                }}
+              >
+                <Icon />
+              </Fab>
+            ))}
+          </Stack>
+        )}
+
         {showBackToTop && (
           <Fab
             size="small"
@@ -1715,6 +1943,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
             <KeyboardArrowUpIcon />
           </Fab>
         )}
+        </Box>
       </Box>
     );
   }
