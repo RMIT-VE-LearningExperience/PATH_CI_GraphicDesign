@@ -1,6 +1,6 @@
 # GraphicDesign restructure: plan and progress log
 
-Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 to 4 are on `Staging-GraphicDesign`. The accordion heading fix and the open-when-short accordion change are the latest commits.
+Last updated: 2026-10-22. Status: all six build-order items are done. Everything up to the tab switches is on `Staging-GraphicDesign`; the accordion sub-step boxes, anchors, arrows and the pinned footer are the latest commits.
 
 ## Ground rules
 - Build on a branch based on `Staging-GraphicDesign`. Never push to `main`. Confirm before any push (see CLAUDE.md on Staging).
@@ -92,7 +92,7 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Phases 1 t
    - Accordions (Printer Overview, Appendix): each sub-item is now its own bordered box inside its parent's panel, with its own heading (h3) and chevron, so it can expand and retract separately. Every entry and sub-item has an anchor id such as `appendix-2` or `appendix-2-1`. Defaults: three entries or fewer start open, and three sub-items or fewer under one entry start open.
    - Deep links: `#appendix-2-3` (or `#overview-1`) opens the right tab and the sections around it, scrolls to the section and focuses its heading. Link scrolling keeps the section below the sticky strip using the strip's measured height.
    - Up/down arrows (Previous section / Next section, as in PATH-Apparel) on the Overview and Appendix tabs only. They step through the sections that are visible (a closed entry's sub-items are skipped), do not open what they land on, use `replaceState` for the hash (no history entries), are real links, and are disabled at the ends. They sit in a "Page shortcuts" landmark above the back-to-top button.
-   - Not done: arrows on the Steps tab (not asked for).
+   - Steps tab: the same Previous step / Next step arrows. Every step card has an anchor id (`step-2`, `step-2-1`, matching the 2 and 2.1 numbering), a link such as `#step-2-1` opens the Steps tab and scrolls to it, and the card takes focus. The arrows are hidden when a product has only one step. They sit above the back-to-top button without overlapping it on a 375px screen.
 
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.

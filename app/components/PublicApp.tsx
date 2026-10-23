@@ -368,6 +368,8 @@ function StepImage({ src, alt, onClick }: { src: string; alt: string; onClick: (
 // heading role, so this is built directly.
 
 type AccordionAnchor = { id: string; stepId: string; parentStepId: string | null };
+// "3" -> "step-3", "3.1" -> "step-3-1"
+const stepAnchorId = (label: string) => `step-${label.replace(".", "-")}`;
 const NO_ANCHORS: AccordionAnchor[] = [];
 
 // Gap left between the sticky strip (title + tabs) and a section it has been scrolled to
@@ -765,6 +767,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   // around it and scrolls to it, and the arrows step through them in order.
 
   const accordionTab: "overview" | "appendix" | null = activeTab === "overview" || activeTab === "appendix" ? activeTab : null;
+  // The arrows work on the Steps tab as well, where every step and sub-step is an anchor ("step-2", "step-2-1")
+  const hasAnchorTab = accordionTab !== null || activeTab === "steps";
 
   // Open or closed, by step id. Anything not listed follows the default: three entries or fewer
   // start open, and so do three sub-items or fewer under one entry.
@@ -773,6 +777,9 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   const setAccordionOpen = (stepId: string, open: boolean) => setAccordionOverrides((prev) => ({ ...prev, [stepId]: open }));
 
   const accordionAnchors = useMemo(() => {
+    if (activeTab === "steps") {
+      return stepEntries.entries.map(({ step, label }): AccordionAnchor => ({ id: stepAnchorId(label), stepId: step.id, parentStepId: null }));
+    }
     if (!accordionTab) return NO_ANCHORS;
     const anchors: AccordionAnchor[] = [];
     sectionGroups[accordionTab].forEach((group, i) => {
@@ -780,7 +787,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
       group.subSteps.forEach((sub, j) => anchors.push({ id: `${accordionTab}-${i + 1}-${j + 1}`, stepId: sub.id, parentStepId: group.main.id }));
     });
     return anchors;
-  }, [accordionTab, sectionGroups]);
+  }, [activeTab, accordionTab, sectionGroups, stepEntries]);
 
   const stripRef = useRef<HTMLDivElement | null>(null);
   // The sticky strip's height (plus the preview banner when shown), so a section scrolled to
@@ -859,8 +866,10 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   function goToAnchor(anchorId: string, openTarget: boolean) {
     const anchor = accordionAnchors.find((a) => a.id === anchorId);
     if (!anchor) return;
-    if (anchor.parentStepId) setAccordionOpen(anchor.parentStepId, true);
-    if (openTarget) setAccordionOpen(anchor.stepId, true);
+    if (accordionTab) {
+      if (anchor.parentStepId) setAccordionOpen(anchor.parentStepId, true);
+      if (openTarget) setAccordionOpen(anchor.stepId, true);
+    }
     arrivedAtRef.current = anchorId;
     arrivedYRef.current = null;
     settleUntilRef.current = performance.now() + 1200;
@@ -873,7 +882,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
       const el = document.getElementById(anchorId);
       if (!el) return;
       el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
-      document.getElementById(`${anchorId}-header`)?.focus({ preventScroll: true });
+      // An accordion heading takes focus; a step card is focusable by script only, so it can too
+      (document.getElementById(`${anchorId}-header`) ?? el).focus({ preventScroll: true });
       // Keep the address pointing at this section, without adding a history entry
       window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}#${anchorId}`);
     }, 60);
@@ -885,7 +895,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   useEffect(() => {
     const read = () => {
       const hash = window.location.hash.slice(1);
-      if (/^(overview|appendix)-\d+(-\d+)?$/.test(hash)) { hashTargetRef.current = hash; setHashTick((n) => n + 1); }
+      if (/^(overview|appendix|step)-\d+(-\d+)?$/.test(hash)) { hashTargetRef.current = hash; setHashTick((n) => n + 1); }
     };
     read();
     window.addEventListener("hashchange", read);
@@ -894,7 +904,8 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
   useEffect(() => {
     const target = hashTargetRef.current;
     if (!target || !atSteps || !productId) return;
-    const tab = target.split("-")[0] as "overview" | "appendix";
+    const prefix = target.split("-")[0];
+    const tab: StepSection = prefix === "step" ? "steps" : (prefix as "overview" | "appendix");
     if (!visibleTabs.includes(tab)) return;
     if (activeTab !== tab) { setTabChoice({ itemId: productId, tab }); return; }
     if (!accordionAnchors.some((a) => a.id === target)) { hashTargetRef.current = null; return; }
@@ -1699,9 +1710,12 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                     <Card
                       key={step.id}
                       ref={(el) => { stepRefs.current[index] = el; }}
+                      id={stepAnchorId(label)}
+                      tabIndex={-1}
                       data-step-index={index}
                       sx={{
                         borderRadius: "8px", border: "none", backgroundColor: colors.cardBg, boxShadow: colors.cardShadow, overflow: "hidden",
+                        scrollMarginTop: `${anchorScrollMargin}px`, outline: "none",
                         // A sub-step sits close under its main step and is indented
                         mt: index === 0 ? 0 : isMain ? { xs: 3, sm: 4 } : 1,
                         ml: isMain ? 0 : { xs: 2, sm: 4 },
@@ -1899,11 +1913,11 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
         {/* Floating shortcuts sit in a landmark so no content is outside one */}
         <Box component="nav" aria-label="Page shortcuts">
-        {accordionTab && anchorView.visible.length > 1 && (
+        {hasAnchorTab && anchorView.visible.length > 1 && (
           <Stack spacing={1} sx={{ position: "fixed", bottom: 128, right: 24, zIndex: 20, "@media print": { display: "none" } }}>
             {([
-              { label: "Previous section", target: previousAnchor, Icon: KeyboardArrowUpIcon },
-              { label: "Next section", target: nextAnchor, Icon: KeyboardArrowDownIcon },
+              { label: activeTab === "steps" ? "Previous step" : "Previous section", target: previousAnchor, Icon: KeyboardArrowUpIcon },
+              { label: activeTab === "steps" ? "Next step" : "Next section", target: nextAnchor, Icon: KeyboardArrowDownIcon },
             ] as const).map(({ label, target, Icon }) => (
               <Fab
                 key={label}
