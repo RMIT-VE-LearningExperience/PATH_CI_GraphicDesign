@@ -98,6 +98,8 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Everything
 
 11. [x] Admin sideways scroll (committed locally, not yet pushed): the admin main area could be scrolled sideways, so an accidental swipe pushed the content off centre. Cause: the visually hidden helper elements (hidden page heading, "Actions" column label, some dialog status text) were sized with `width: 1` / `height: 1`, which MUI's `sx` reads as 100%, not 1px, so they stretched past the edge of the area. They now use `1px` (also on the public page's screen-reader-only text). The main area also no longer scrolls sideways on screens 700px wide or more (overflow is clipped and long unbroken words wrap). Below 700px the sidebar leaves too little room for the content, so it stays scrollable there. The admin is still not designed for phones (the sidebar is a fixed 300px wide).
 
+12. [x] Safety button (committed locally, not yet pushed): the round "!" icon is now a solid red button with white text, the warning icon and the safety tab's name (so it follows any rename; "Quick Safety Reminders" by default). It sits left-aligned above the first accordion in Printer Overview (above the content when a product has no overview), and still reopens the pop-up unlocked.
+
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.
 - Level `enabled` flag exists, and the app already skips disabled levels.

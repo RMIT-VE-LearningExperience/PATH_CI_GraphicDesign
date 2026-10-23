@@ -760,17 +760,22 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     );
   }
 
+  // Reopens the Quick Safety Reminders pop-up. The text is the safety tab's name, so it follows any rename.
   const safetyButton = (
-    <Tooltip title={tabLabels.safety}>
-      <IconButton
-        onClick={() => openSafety(false)}
-        aria-label={`Open ${tabLabels.safety}`}
-        aria-haspopup="dialog"
-        sx={{ width: 44, height: 44, color: "#B3261E", "&:hover": { bgcolor: "rgba(179,38,30,0.08)" }, "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: 2 } }}
-      >
-        <ErrorOutlineIcon />
-      </IconButton>
-    </Tooltip>
+    <Button
+      onClick={() => openSafety(false)}
+      variant="contained"
+      startIcon={<ErrorOutlineIcon aria-hidden="true" />}
+      aria-haspopup="dialog"
+      sx={{
+        minHeight: 44, px: 2.5, textTransform: "none", fontWeight: 700, fontSize: "1rem", textAlign: "left",
+        bgcolor: "#B3261E", color: "#FFFFFF", boxShadow: "none",
+        "&:hover": { bgcolor: "#8C1D18", boxShadow: "none" },
+        "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: 2 },
+      }}
+    >
+      {tabLabels.safety}
+    </Button>
   );
 
   // ── Accordion anchors, open state and up/down navigation ─────────────
@@ -1683,7 +1688,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
 
               {/* Quick Safety Reminders can be reopened from the overview (or from here when there is no overview) */}
               {sectionGroups.safety.length > 0 && !visibleTabs.includes("overview") && (
-                <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 1 }}>{safetyButton}</Box>
+                <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2 }}>{safetyButton}</Box>
               )}
 
               {activeTab === "overview" && (
@@ -1693,7 +1698,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
                   aria-labelledby={visibleTabs.length > 1 ? "step-tab-overview" : undefined}
                   sx={{ pb: { xs: 6, sm: 8 } }}
                 >
-                  {sectionGroups.safety.length > 0 && <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 1 }}>{safetyButton}</Box>}
+                  {sectionGroups.safety.length > 0 && <Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2 }}>{safetyButton}</Box>}
                   {renderAccordion(sectionGroups.overview, "overview")}
                 </Box>
               )}
