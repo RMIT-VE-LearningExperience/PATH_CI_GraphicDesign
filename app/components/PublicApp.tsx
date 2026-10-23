@@ -40,6 +40,7 @@ import {
   Info as InfoIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
+  VerticalAlignTop as VerticalAlignTopIcon,
   Remove as RemoveIcon,
 } from "@mui/icons-material";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1960,19 +1961,24 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
         )}
 
         {showBackToTop && (
-          <Fab
-            size="small"
+          // White pill with the words on the left and the "to the top" arrow (an arrow under a line) on the right.
+          // That arrow is deliberately unlike the chevrons on the Previous/Next buttons above it.
+          <Button
             onClick={scrollToTop}
-            aria-label="Back to top"
+            variant="contained"
+            endIcon={<VerticalAlignTopIcon aria-hidden="true" />}
             sx={{
               position: "fixed", bottom: 72, right: 24, zIndex: 20,
-              bgcolor: colors.primary, color: "#ffffff",
-              "&:hover": { bgcolor: colors.darkBg },
+              minHeight: 44, pl: 2.25, pr: 1.75, borderRadius: "22px", textTransform: "none", fontWeight: 700, fontSize: "0.95rem", whiteSpace: "nowrap",
+              bgcolor: "#FFFFFF", color: colors.primary, border: "1px solid rgba(0,0,84,0.18)",
               boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              "&:hover": { bgcolor: "#EEF0F8", boxShadow: "0 4px 12px rgba(0,0,0,0.25)" },
+              "&:focus-visible": { outline: `3px solid ${colors.primary}`, outlineOffset: 2 },
+              "@media print": { display: "none" },
             }}
           >
-            <KeyboardArrowUpIcon />
-          </Fab>
+            Back to top
+          </Button>
         )}
         </Box>
       </Box>
