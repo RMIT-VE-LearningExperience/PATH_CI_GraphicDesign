@@ -1963,13 +1963,18 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
         {showBackToTop && (
           // White pill with the words on the left and the "to the top" arrow (an arrow under a line) on the right.
           // That arrow is deliberately unlike the chevrons on the Previous/Next buttons above it.
+          // On phones it is just the round arrow, which takes less room and is harder to hit by mistake.
           <Button
             onClick={scrollToTop}
             variant="contained"
+            aria-label="Back to top"
             endIcon={<VerticalAlignTopIcon aria-hidden="true" />}
             sx={{
               position: "fixed", bottom: 72, right: 24, zIndex: 20,
-              minHeight: 44, pl: 2.25, pr: 1.75, borderRadius: "22px", textTransform: "none", fontWeight: 700, fontSize: "0.95rem", whiteSpace: "nowrap",
+              minHeight: 44, minWidth: 44, width: { xs: 44, sm: "auto" },
+              pl: { xs: 0, sm: 2.25 }, pr: { xs: 0, sm: 1.75 },
+              borderRadius: { xs: "50%", sm: "22px" }, textTransform: "none", fontWeight: 700, fontSize: "0.95rem", whiteSpace: "nowrap",
+              "& .MuiButton-endIcon": { ml: { xs: 0, sm: 1 }, mr: { xs: 0, sm: -0.5 } },
               bgcolor: "#FFFFFF", color: colors.primary, border: "1px solid rgba(0,0,84,0.18)",
               boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
               "&:hover": { bgcolor: "#EEF0F8", boxShadow: "0 4px 12px rgba(0,0,0,0.25)" },
@@ -1977,7 +1982,7 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
               "@media print": { display: "none" },
             }}
           >
-            Back to top
+            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>Back to top</Box>
           </Button>
         )}
         </Box>
