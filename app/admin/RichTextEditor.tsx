@@ -9,6 +9,7 @@ import {
   FormatUnderlined as FormatUnderlinedIcon,
   FormatListNumbered as FormatListNumberedIcon,
   List as ListIcon,
+  SortByAlpha as SortByAlphaIcon,
   Link as LinkIcon,
   LinkOff as LinkOffIcon,
 } from "@mui/icons-material";
@@ -33,6 +34,50 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
   function runCommand(command: string, commandValue?: string) {
     editorRef.current?.focus();
     document.execCommand(command, false, commandValue);
+    onChange(editorRef.current?.innerHTML ?? "");
+  }
+
+  // Bullets, numbers (1, 2, 3) and letters (a, b, c). A lettered list is an ordered list with type="a",
+  // so it numbers like any other list and the page shows the letters natively.
+  type ListKind = "bullets" | "numbers" | "letters";
+
+  function closestList(): HTMLOListElement | HTMLUListElement | null {
+    const root = editorRef.current;
+    let node: Node | null = window.getSelection()?.anchorNode ?? null;
+    while (node && node !== root) {
+      if (node.nodeName === "OL" || node.nodeName === "UL") return node as HTMLOListElement | HTMLUListElement;
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  function listKindOf(list: Element | null): ListKind | null {
+    if (!list) return null;
+    if (list.tagName === "UL") return "bullets";
+    return list.getAttribute("type") === "a" ? "letters" : "numbers";
+  }
+
+  function applyList(kind: ListKind) {
+    editorRef.current?.focus();
+    const current = closestList();
+    const currentKind = listKindOf(current);
+    if (currentKind === kind) {
+      // Pressing the same list button again takes the list off
+      document.execCommand(kind === "bullets" ? "insertUnorderedList" : "insertOrderedList");
+    } else if (current && currentKind !== "bullets" && kind !== "bullets") {
+      // Numbers and letters are the same kind of list, so switching just changes the style
+      if (kind === "letters") current.setAttribute("type", "a");
+      else current.removeAttribute("type");
+    } else {
+      // The browser may put the caret on the editor itself (an empty editor), so find the new list by
+      // comparing the lists before and after instead of by where the caret is
+      const before = new Set(Array.from(editorRef.current?.querySelectorAll("ol") ?? []));
+      document.execCommand(kind === "bullets" ? "insertUnorderedList" : "insertOrderedList");
+      if (kind === "letters") {
+        closestList()?.setAttribute("type", "a");
+        editorRef.current?.querySelectorAll("ol").forEach((list) => { if (!before.has(list)) list.setAttribute("type", "a"); });
+      }
+    }
     onChange(editorRef.current?.innerHTML ?? "");
   }
 
@@ -106,6 +151,7 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
           { icon: <FormatUnderlinedIcon />, cmd: "underline", title: "Underline" },
           { icon: <ListIcon />, cmd: "insertUnorderedList", title: "Bullets" },
           { icon: <FormatListNumberedIcon />, cmd: "insertOrderedList", title: "Numbered list" },
+          { icon: <SortByAlphaIcon />, cmd: "lettered", title: "Lettered list (a, b, c)" },
           { icon: <FormatIndentDecreaseIcon />, cmd: "outdent", title: "Decrease indent" },
           { icon: <FormatIndentIncreaseIcon />, cmd: "indent", title: "Increase indent" },
         ].map(({ icon, cmd, title }) => (
@@ -115,7 +161,13 @@ export default function RichTextEditor({ label, value, onChange }: Props) {
             // mousedown is prevented so the editor keeps its selection;
             // click (also fired by Enter/Space) runs the command
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (cmd === "indent" || cmd === "outdent" ? changeIndent(cmd) : runCommand(cmd))}
+            onClick={() => {
+              if (cmd === "indent" || cmd === "outdent") changeIndent(cmd);
+              else if (cmd === "insertUnorderedList") applyList("bullets");
+              else if (cmd === "insertOrderedList") applyList("numbers");
+              else if (cmd === "lettered") applyList("letters");
+              else runCommand(cmd);
+            }}
             aria-label={title}
             title={title}
             sx={{ color: "#000054" }}

@@ -100,6 +100,8 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Everything
 
 12. [x] Safety button (committed locally, not yet pushed): the round "!" icon is now a solid red button with white text, the warning icon and the safety tab's name (so it follows any rename; "Quick Safety Reminders" by default). It sits left-aligned above the first accordion in Printer Overview (above the content when a product has no overview), and still reopens the pop-up unlocked.
 
+13. [x] Lettered lists (committed locally, not yet pushed): the editor toolbar has a third list button, "Lettered list (a, b, c)", next to Bullets and Numbered list. A lettered list is an ordered list with `type="a"`, so the public page shows the letters natively (no stored-data change). Switching a list between numbers and letters changes the whole list; pressing the same list button again takes the current line out of the list (the browser's normal behaviour for bullets and numbers). Lettered lists can be nested inside numbered lists. Lowercase letters only.
+
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.
 - Level `enabled` flag exists, and the app already skips disabled levels.
