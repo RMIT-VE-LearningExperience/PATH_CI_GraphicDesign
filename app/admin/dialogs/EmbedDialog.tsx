@@ -110,7 +110,7 @@ export default function EmbedDialog({ open, onClose, url, itemName }: Props) {
           </Box>
         </Stack>
       </DialogContent>
-      <Box role="status" sx={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
+      <Box role="status" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
         {copied ? "Embed code copied to clipboard" : ""}
       </Box>
       <DialogActions sx={{ ...DIALOG_ACTIONS_SX, gap: 1 }}>

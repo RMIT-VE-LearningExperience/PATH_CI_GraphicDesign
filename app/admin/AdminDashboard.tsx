@@ -75,7 +75,8 @@ import StatsModal from "./dialogs/StatsModal";
 
 // Visually hidden but available to assistive tech
 const visuallyHiddenSx = {
-  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+  // Pixel strings on purpose: in MUI's sx a bare 1 means 100%, which made these hidden elements as wide as the page
+  position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px",
   overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0,
 } as const;
 
@@ -1839,7 +1840,16 @@ export default function AdminDashboard() {
         component="main"
         id="main-content"
         tabIndex={-1}
-        sx={{ flex: 1, p: 3, bgcolor: "#f2f2f2", minHeight: "100vh", overflowY: "auto", position: "relative", outline: "none" }}
+        // minWidth 0 lets the area shrink beside the sidebar. On screens wide enough for the content, sideways
+        // overflow is clipped rather than scrolled, so an accidental swipe or a long unbroken word cannot push
+        // the content off centre (long words wrap instead). Below that the content genuinely does not fit
+        // beside the sidebar, so it stays scrollable and nothing becomes unreachable.
+        sx={{
+          flex: 1, minWidth: 0, p: 3, bgcolor: "#f2f2f2", minHeight: "100vh", position: "relative", outline: "none",
+          overflowX: "auto",
+          "@media (min-width: 700px)": { overflowX: "hidden", "@supports (overflow: clip)": { overflowX: "clip" } },
+          overflowWrap: "anywhere",
+        }}
       >
         {/* Loading overlay */}
         {actionLoading && (

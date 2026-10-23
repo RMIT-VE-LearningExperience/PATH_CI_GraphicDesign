@@ -47,7 +47,7 @@ export default function CopyLinkDialog({ open, onClose, url, itemName }: Props) 
           </Typography>
         </Box>
       </DialogContent>
-      <Box role="status" sx={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
+      <Box role="status" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
         {copied ? "Link copied to clipboard" : ""}
       </Box>
       <DialogActions sx={{ ...DIALOG_ACTIONS_SX, gap: 1 }}>

@@ -64,7 +64,7 @@ function DailyViewsChart({ rows }: { rows: { date: string; views: number }[] }) 
           );
         })}
       </svg>
-      <Box component="table" sx={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
+      <Box component="table" sx={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }}>
         <caption>Daily views (last {rows.length} days)</caption>
         <thead><tr><th scope="col">Date</th><th scope="col">Views</th></tr></thead>
         <tbody>

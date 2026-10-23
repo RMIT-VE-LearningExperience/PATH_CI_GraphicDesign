@@ -96,6 +96,8 @@ Last updated: 2026-10-22. Status: all six build-order items are done. Everything
 
 10. [x] Bug fix (committed locally, not yet pushed): an entry whose text had been cleared in the editor (a lone `<br>`, an empty paragraph or `&nbsp;`) rendered an empty block with spacing, so one accordion entry's panel was taller than another's. Content with no visible text is no longer rendered, in every tab and in the safety pop-up.
 
+11. [x] Admin sideways scroll (committed locally, not yet pushed): the admin main area could be scrolled sideways, so an accidental swipe pushed the content off centre. Cause: the visually hidden helper elements (hidden page heading, "Actions" column label, some dialog status text) were sized with `width: 1` / `height: 1`, which MUI's `sx` reads as 100%, not 1px, so they stretched past the edge of the area. They now use `1px` (also on the public page's screen-reader-only text). The main area also no longer scrolls sideways on screens 700px wide or more (overflow is clipped and long unbroken words wrap). Below 700px the sidebar leaves too little room for the content, so it stays scrollable there. The admin is still not designed for phones (the sidebar is a fixed 300px wide).
+
 ## Findings from the review (for context)
 - Current app: two page types only (browse levels, then steps). Slugs map one-to-one onto levels. `PublicApp.tsx` (about 1,250 lines) and `AdminDashboard.tsx` (about 1,700 lines) are monolithic.
 - Level `enabled` flag exists, and the app already skips disabled levels.
