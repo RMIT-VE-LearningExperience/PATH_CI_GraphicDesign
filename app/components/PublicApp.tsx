@@ -53,6 +53,41 @@ import { DEFAULT_STEP_TAB_ACTIVE, DEFAULT_STEP_TAB_LABELS, groupSteps, isStepSec
 
 const PROGRESS_KEY = "path_guide_progress_v1";
 
+// A visitor who has been away for more than 24 hours counts as a new visit: the product opens on Printer
+// Overview again and the Quick Safety Reminders pop-up shows again. The time of their last visit is kept in
+// the browser (localStorage), together with which products they have already seen it for, so it works across
+// tabs and after the browser is closed. Nothing is stored on the server.
+const LAST_VISIT_KEY = "path_last_visit_at";
+const NEW_VISIT_AFTER_MS = 24 * 60 * 60 * 1000;
+const SEEN_KEY_PREFIXES = ["path_overview_seen_", "path_safety_seen_"];
+
+function readLastVisit(): number | null {
+  try {
+    const raw = window.localStorage.getItem(LAST_VISIT_KEY);
+    const value = raw === null ? NaN : Number(raw);
+    return Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+// True when there is no usable last-visit time, it is more than 24 hours old, or it is in the future
+// (the device clock was changed). A future time must not lock the reset out until that moment.
+function isNewVisit(lastVisit: number | null, now: number): boolean {
+  return lastVisit === null || now - lastVisit > NEW_VISIT_AFTER_MS || lastVisit - now > 5 * 60 * 1000;
+}
+
+function clearSeenFlags() {
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && SEEN_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) stale.push(key);
+    }
+    stale.forEach((key) => window.localStorage.removeItem(key));
+  } catch { /* storage unavailable: the in-memory record is cleared by the caller */ }
+}
+
 const colors = {
   primary: "#000054",
   darkBg: "#45443F",
@@ -607,10 +642,10 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     if (!atSteps || !productId || !hasOverviewTab) return;
     const key = `path_overview_seen_${productId}`;
     let seen = overviewSeenRef.current.has(key);
-    try { seen = seen || window.sessionStorage.getItem(key) === "1"; } catch { /* storage unavailable: fall back to the in-memory record */ }
+    try { seen = seen || window.localStorage.getItem(key) === "1"; } catch { /* storage unavailable: fall back to the in-memory record */ }
     if (seen) return;
     overviewSeenRef.current.add(key);
-    try { window.sessionStorage.setItem(key, "1"); } catch { /* ignore */ }
+    try { window.localStorage.setItem(key, "1"); } catch { /* ignore */ }
     setOverviewFirstFor(productId);
   }, [atSteps, productId, hasOverviewTab]);
 
@@ -677,13 +712,44 @@ export default function PublicApp({ initialSlugs }: { initialSlugs: string[] }) 
     if (!atSteps || !productId || sectionGroups.safety.length === 0) return;
     const key = `path_safety_seen_${productId}`;
     let seen = safetySeenRef.current.has(key);
-    try { seen = seen || window.sessionStorage.getItem(key) === "1"; } catch { /* storage unavailable: fall back to the in-memory record */ }
+    try { seen = seen || window.localStorage.getItem(key) === "1"; } catch { /* storage unavailable: fall back to the in-memory record */ }
     if (seen) return;
     safetySeenRef.current.add(key);
-    try { window.sessionStorage.setItem(key, "1"); } catch { /* ignore */ }
+    try { window.localStorage.setItem(key, "1"); } catch { /* ignore */ }
     openSafety(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atSteps, productId, sectionGroups.safety.length]);
+
+  // Keeps the last-visit time up to date while the app is in use, and starts a new visit (forgetting which
+  // products the overview and the safety pop-up were shown for) when the visitor comes back after more than 24 hours.
+  useEffect(() => {
+    if (isPreviewMode) return;
+    let lastCheck = 0;
+    const touch = () => {
+      const now = Date.now();
+      if (isNewVisit(readLastVisit(), now)) {
+        clearSeenFlags();
+        overviewSeenRef.current.clear();
+        safetySeenRef.current.clear();
+      }
+      try { window.localStorage.setItem(LAST_VISIT_KEY, String(now)); } catch { /* ignore */ }
+      lastCheck = now;
+    };
+    // Activity events are frequent, so only look again after a short pause
+    const touchSometimes = () => { if (Date.now() - lastCheck > 5000) touch(); };
+    const onVisible = () => { if (document.visibilityState === "visible") touch(); };
+    touch();
+    window.addEventListener("pointerdown", touchSometimes, { passive: true });
+    window.addEventListener("keydown", touchSometimes);
+    window.addEventListener("scroll", touchSometimes, { passive: true });
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("pointerdown", touchSometimes);
+      window.removeEventListener("keydown", touchSometimes);
+      window.removeEventListener("scroll", touchSometimes);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isPreviewMode]);
 
   // A step's text, images and video, shared by the step cards, the accordions
   // and the safety pop-up
